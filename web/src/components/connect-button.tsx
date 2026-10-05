@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { WalletPicker } from '@/components/wallet-picker'
+import { PasskeyDialog } from '@/components/passkey-dialog'
 import { useT } from '@/lib/i18n'
 import { useWallet } from '@/lib/wallet'
 
@@ -17,7 +17,7 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 4)}...${address.slice(-4)}`
 }
 
-export function ConnectButton() {
+export function ConnectButton({ className }: { className?: string }) {
   const t = useT()
   const { address, connecting, disconnect } = useWallet()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -45,10 +45,10 @@ export function ConnectButton() {
 
   return (
     <>
-      <Button onClick={() => setPickerOpen(true)} disabled={connecting}>
+      <Button className={className} onClick={() => setPickerOpen(true)} disabled={connecting}>
         {connecting ? `${t('topbar.connecting')}...` : t('topbar.connect')}
       </Button>
-      <WalletPicker open={pickerOpen} onOpenChange={setPickerOpen} />
+      <PasskeyDialog open={pickerOpen} onOpenChange={setPickerOpen} />
     </>
   )
 }
