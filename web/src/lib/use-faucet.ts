@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getNativeBalance } from '@/lib/balances'
-import { getFxrpBalance, FXRP_SCALE } from '@/lib/fxrp'
+import { getAusdBalance, AUSD_SCALE } from '@/lib/ausd'
 import { useWallet } from '@/lib/wallet'
 
-const FAUCET_URL = 'https://faucet.flare.network/coston2'
-const FAUCET_STORAGE_KEY = 'yoursave:faucet:v1'
+const FAUCET_STORAGE_KEY = 'mirai:faucet:v1'
 
-const MIN_C2FLR = 1n * 10n ** 17n // 0.1 C2FLR
-const MIN_FXRP = 1n * FXRP_SCALE // 1 FXRP
+// Enough MON for a handful of transactions; matches the onboarding drip floor.
+const MIN_MON = 10n ** 17n // 0.1 MON
+const MIN_AUSD = 1n * AUSD_SCALE
 
 export type FaucetBalance = {
-  c2flr: bigint
-  fxrp: bigint
+  mon: bigint
+  ausd: bigint
 }
 
 export function faucetedFlag(address: string): boolean {
@@ -36,9 +36,22 @@ function setFaucetedFlag(address: string, value: boolean) {
   }
 }
 
+/** Asks /api/onboard to top up gas and test AUSD for `address`. */
+export async function requestTestFunds(address: string): Promise<{ mon: boolean; ausd: boolean }> {
+  const res = await fetch('/api/onboard', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address }),
+  })
+  // A non-JSON reply means no /api behind this host (e.g. a static preview without functions).
+  if (!res.headers.get('content-type')?.includes('json')) throw new Error('faucet_unavailable')
+  const body = (await res.json()) as { mon: boolean; ausd: boolean; error?: string }
+  if (!res.ok) throw new Error(body.error ?? 'faucet_unavailable')
+  return body
+}
+
 export function useFaucet(): {
   faucetBusy: boolean
-  anyBusy: boolean
   balances: FaucetBalance | null
   error: string | null
   hasFunds: boolean
@@ -48,6 +61,7 @@ export function useFaucet(): {
   const { address } = useWallet()
   const [balances, setBalances] = useState<FaucetBalance | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [faucetBusy, setFaucetBusy] = useState(false)
 
   const refreshBalances = useCallback(async () => {
     if (!address) {
@@ -57,13 +71,9 @@ export function useFaucet(): {
     }
     setError(null)
     try {
-      const [c2flr, fxrp] = await Promise.all([
-        getNativeBalance(address),
-        getFxrpBalance(address),
-      ])
-      setBalances({ c2flr, fxrp })
-      const funded = c2flr >= MIN_C2FLR || fxrp >= MIN_FXRP
-      setFaucetedFlag(address, funded)
+      const [mon, ausd] = await Promise.all([getNativeBalance(address), getAusdBalance(address)])
+      setBalances({ mon, ausd })
+      setFaucetedFlag(address, mon >= MIN_MON && ausd >= MIN_AUSD)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'balance_fetch_failed')
       setBalances(null)
@@ -75,20 +85,19 @@ export function useFaucet(): {
   }, [refreshBalances])
 
   const runFaucet = useCallback(async () => {
-    window.open(FAUCET_URL, '_blank', 'noopener,noreferrer')
-  }, [])
+    if (!address) return
+    setFaucetBusy(true)
+    try {
+      await requestTestFunds(address)
+      await refreshBalances()
+    } finally {
+      setFaucetBusy(false)
+    }
+  }, [address, refreshBalances])
 
   const hasFunds = balances
-    ? balances.c2flr >= MIN_C2FLR || balances.fxrp >= MIN_FXRP
+    ? balances.mon >= MIN_MON && balances.ausd >= MIN_AUSD
     : faucetedFlag(address ?? '')
 
-  return {
-    faucetBusy: false,
-    anyBusy: false,
-    balances,
-    error,
-    hasFunds,
-    runFaucet,
-    refreshBalances,
-  }
+  return { faucetBusy, balances, error, hasFunds, runFaucet, refreshBalances }
 }
