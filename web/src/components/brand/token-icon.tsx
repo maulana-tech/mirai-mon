@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 
-export type TokenSymbol = 'fxrp' | 'flr' | 'eth'
+export type TokenSymbol = 'ausd' | 'mon' | 'eth'
 
 type TokenIconProps = {
   token: TokenSymbol
@@ -35,7 +35,7 @@ export function TokenIcon({ token, size = 24, className }: TokenIconProps) {
       </span>
     )
   }
-  const src = token === 'fxrp' ? '/tokens/fxrp.svg' : '/tokens/flr.svg'
+  const src = token === 'ausd' ? '/tokens/ausd.png' : '/tokens/mon.png'
   return (
     <img
       src={src}
