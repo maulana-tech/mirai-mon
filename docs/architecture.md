@@ -1,231 +1,70 @@
 # Architecture
 
-## System Overview
-
-YourSave is a programmable savings splitter on Flare Coston2. It automatically routes a portion of every incoming FXRP payment into yield-earning positions.
-
-### Core Components
+Mirai splits every incoming AUSD payment into a spendable balance and savings held in an ERC-4626 vault, on Monad testnet. Accounts are passkeys (Mera); there is no wallet extension.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (React + Vite + TS)          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐  │
-│  │ Dashboard │ │ Pay Page │ │ Yield    │ │ Rules/Settings │  │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────┬───────┘  │
-│       │             │            │                │          │
-│       └─────────────┴────────────┴────────────────┘          │
-│                           │ ethers.js v6                      │
-└───────────────────────────┼───────────────────────────────────┘
-                            │
-┌───────────────────────────┼───────────────────────────────────┐
-│                    Flare Coston2 (Chain ID 114)                │
-│                           │                                    │
-│  ┌────────────────────────▼────────────────────────────────┐  │
-│  │                    YourSave Contract                     │  │
-│  │  • pay(from, to, amount) — split into spend + savings   │  │
-│  │  • withdrawSpend() — pull spendable balance             │  │
-│  │  • withdrawSavings() — pull savings as FXRP             │  │
-│  │  • withdrawSavingsToAdapter() — route to yield protocol │  │
-│  │  • setSplit() / setLock() / setYieldTarget()            │  │
-│  └──────┬──────────────────────────────┬───────────────────┘  │
-│         │                              │                       │
-│  ┌──────▼───────┐            ┌─────────▼──────────┐           │
-│  │ VaultAdapter │            │ SparkDexAdapter     │           │
-│  │ (ERC-4626)   │            │ (SparkDEX V3 swap)  │           │
-│  └──────┬───────┘            └─────────┬──────────┘           │
-│         │                              │                       │
-│  ┌──────▼───────┐            ┌─────────▼──────────┐           │
-│  │  FxrpVault   │            │  SparkDEX Router    │           │
-│  │  (ERC-4626)  │            │  (Uniswap V3 fork)  │           │
-│  └──────────────┘            └────────────────────┘           │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐     │
-│  │                    FXRP Token                         │     │
-│  │  (FAssets wrapped XRP, 6 decimals on Coston2)        │     │
-│  └──────────────────────────────────────────────────────┘     │
-└───────────────────────────────────────────────────────────────┘
+Browser (React)                                   Monad testnet
+┌──────────────────────────────┐                  ┌────────────────────────────┐
+│ passkey ──PRF──> account key │                  │ Mirai (Mirai.sol)        │
+│        Mera signing session  │  payWithPermit   │  ├─ spend balance (AUSD)   │
+│        MeraSigner (ethers)   │ ───────────────> │  └─ vault shares ──┐       │
+│ reads: JsonRpcProvider       │                  │ 3× MiraiVault (yield)     <┤│
+│                              │                  │ MarketVault (Smart Money) <┘│
+│                              │                  │ 3× YieldStreamer (testnet)  │
+│                              │                  │ Chainlink BTC/ETH feeds     │
+│ history: Envio GraphQL       │ <── indexer ──── │ AUSD (Agora, permit)       │
+└──────────────┬───────────────┘                  └────────────────────────────┘
+               │ POST /api/onboard (new accounts)
+               ▼
+        Vercel function: MON for gas + test AUSD from a drip reserve
+
+        GET /api/market: Nansen smart-money holdings (Monad) → basket weights → MarketVault.rebalance
 ```
 
-## Smart Contracts
+## Contracts (`evm/src`)
 
-### YourSave (Core)
+### Mirai (`Mirai.sol`)
 
-The main savings contract. Holds FXRP from payments and manages per-user accounts.
+Per-user `Account { splitBps, spend, shares, lockUntil, strategy }`; `accountOf` also returns `savings`, the current AUSD value of `shares` in the account's strategy vault.
 
-**Account struct:**
-```solidity
-struct Account {
-    uint16 splitBps;      // Savings split in basis points (default 2000 = 20%)
-    uint128 spend;        // Spendable balance
-    uint128 shares;       // Savings shares (1:1 with FXRP)
-    uint64 lockUntil;     // Lock timestamp
-    YieldTarget yieldTarget; // 0=SparkDEX, 1=Firelight, 2=Upshift
-}
-```
+| Function | Behavior |
+|---|---|
+| `pay(from, to, amount)` | Requires `msg.sender == from`. Pulls `amount`, credits `amount × splitBps` to savings by depositing it into the vault, the rest to `spend`. A savings slice worth 0 shares stays spendable. |
+| `payWithPermit(...)` | Same, after an EIP-2612 permit. A failed permit (e.g. front-run) is ignored and `transferFrom` decides. |
+| `withdrawSpend(user, amount)` | Sends AUSD from the spend balance. Never locked. |
+| `withdrawSavings(user, amount)` | Withdraws `amount` AUSD from the vault, burning `previewWithdraw(amount)` shares. Blocked while locked. |
+| `withdrawAllSavings(user)` | Redeems every share at the price when it executes. The app uses it for "withdraw all", because a Smart Money balance can fall between reading it and the tx landing. Blocked while locked. |
+| `setStrategy(user, strategy)` | 0–3. Redeems the saver's shares from the old vault and deposits into the new one (allowed while locked: funds stay in savings). |
+| `setSplit(user, bps)` | 0–10,000 bps; default 2,000 (20%). |
+| `setLock(user, until)` | Extend-only, at most 5 years ahead. |
 
-**Key functions:**
-- `pay(from, to, amount)` — Transfers FXRP from payer, splits into spend/savings
-- `withdrawSpend(user, amount)` — Withdraws spendable balance to wallet
-- `withdrawSavings(user, shares)` — Withdraws savings as FXRP
-- `withdrawSavingsToAdapter(shares, tokenIn, tokenOut, adapter, amountOutMin, deadline)` — Routes savings through an adapter to a yield protocol
-- `setSplit(user, bps)` — Sets savings percentage (0-10000 bps)
-- `setLock(user, until)` — Sets withdrawal lock date
-- `setYieldTarget(user, target)` — Sets yield protocol (SparkDEX/Firelight/Upshift)
+Every function that acts for a user takes it explicitly and requires `msg.sender` to match (`Unauthorized()`).
 
-### VaultAdapter
+### Strategies: `MiraiVault` + `YieldStreamer`, and `MarketVault`
 
-Deposits FXRP into ERC-4626 vaults (Firelight, Upshift, or custom FxrpVault).
+Four strategies: 0 conservative, 1 balanced (default), 2 growth earn yield; 3 Smart Money invests. The three yield strategies are each a plain OpenZeppelin ERC-4626 vault over AUSD with a 10^6 virtual-share offset, so a donation into an empty vault cannot round later deposits to zero shares. `setStrategy` redeems the saver's shares from the old vault and deposits the assets into the new one.
 
-```solidity
-function routeSavings(
-    address tokenIn,    // FXRP address
-    uint256 amountIn,   // Amount to deposit
-    address vault,      // ERC-4626 vault address
-    address to,         // Recipient of vault shares
-    uint256 amountOutMin, // Minimum shares (slippage)
-    uint256 deadline    // Unused (vault deposits settle instantly)
-) external returns (uint256[] memory amounts);
-```
+Yield is AUSD transferred to a vault without minting shares. On testnet a `YieldStreamer` per vault pays a fixed APR (4% / 8% / 12%, mirroring Aave V3, Curvance and Upshift earnAUSD on Monad mainnet) from an AUSD reserve, as simple interest on the vault's assets since the last drip, capped by the reserve. `Mirai` drips the strategy's streamer before every deposit and withdrawal, inside `try/catch`, so share prices are current and a failing streamer never blocks a payment. On mainnet, the constructor would take the real markets' ERC-4626 vaults and no streamers.
 
-### SparkDexAdapter
+**Smart Money (`MarketVault`)** is an ERC-4626 vault whose value is a BTC/ETH basket priced by Chainlink push feeds on Monad, so it can go down. A deposit "buys" basket units at the oracle price (testnet has no AUSD liquidity for these coins; on mainnet `_buy`/`_sell` become Kuru swaps). `totalAssets = min(basket value, AUSD held)`: gains above deposits are paid from a reserve the operator tops up, losses stay in the vault, and AUSD sent to the vault does not move the share price. Only the `curator` (the drip wallet) can `rebalance(weights)`, which re-weights at current prices without changing value. `web/api/market.ts` sets the weights once a day from Nansen's `smart-money/holdings` on Monad (BTC-like vs ETH-like tokens, 20% floor each, rebalance on >3% drift). No Pyth: Hermes needs a paid key; Chainlink has no MON/USD on testnet.
 
-Swaps FXRP into another token via SparkDEX V3 (Uniswap V3 fork).
+### Custom errors → UI
 
-```solidity
-function routeSavings(
-    address tokenIn,
-    uint256 amountIn,
-    address tokenOut,
-    address to,
-    uint256 amountOutMin,
-    uint256 deadline
-) external returns (uint256[] memory amounts);
-```
+`mirai.evm.ts` maps custom errors to `Error(Contract, #N)` (`ERROR_CODES`), `errors.ts` maps `#N` to an i18n key, and `i18n.tsx` holds the text in three languages. Adding a contract error means updating all three. `#9` is retired.
 
-### FxrpVault (Custom ERC-4626)
+## Accounts: passkeys via Mera (`web/src/lib/wallet.tsx`)
 
-A minimal ERC-4626 vault that accepts FXRP deposits and mints shares 1:1.
+- **Create:** `createPasskeyWithPrfOutput` → PRF output → BIP-39 phrase → `m/44'/60'/0'/0/0` key → `createSecp256k1SigningSession`. The key bytes and PRF output are zeroed; only the session holds the key. The standard path means the phrase also opens the account in any wallet app.
+- **Sign in / recover:** `getPasskeyPrfOutput` with no credential lets the platform offer any synced passkey, so a cleared browser or a new device reconstructs the same address.
+- **Session:** signing is prompt-free for 30 minutes after a ceremony, then the account locks. A locked account still shows balances (from the cached address); the next write runs one passkey prompt and checks the derived address matches.
+- **MeraSigner** adapts the session to ethers: gas limit = estimate + 10% (Monad charges the limit), and the next nonce is tracked locally because Monad's RPC can report a stale pending nonce right after a receipt.
 
-- `deposit(assets, receiver)` — Deposit FXRP, receive vault shares
-- `redeem(shares, receiver, owner)` — Burn shares, receive FXRP
-- `maxDeposit()` — Returns `type(uint256).max` (unlimited deposits)
-- `asset()` — Returns FXRP address
-- `convertToShares(assets)` — 1:1 ratio (no yield yet, pure vault)
+## Onboarding (`web/api/onboard.ts`)
 
-## Payment Flow
+After a passkey is created, the app POSTs the address to `/api/onboard`. A drip wallet (`DRIP_PRIVATE_KEY`) sends 0.5 MON if the balance is under 0.1 MON, and 250 AUSD from its own reserve if the account holds none. The reserve refills from Agora's faucet, which allows one 10,000 AUSD call per 60 seconds across all of testnet.
 
-```mermaid
-sequenceDiagram
-    participant Payer
-    participant YourSave
-    participant FXRP
-    participant VaultAdapter
-    participant FxrpVault
+## Activity history
 
-    Payer->>FXRP: approve(YourSave, amount)
-    Payer->>YourSave: pay(from, to, amount)
-    YourSave->>FXRP: transferFrom(payer, contract, amount)
-    YourSave->>YourSave: split: spend += amount * (1 - splitBps/10000)
-    YourSave->>YourSave: shares += amount * splitBps / 10000
+Monad's public RPC caps `eth_getLogs` at 100 blocks (~30s). `lib/activity.ts` queries the Envio indexer (`VITE_INDEXER_URL`) for full history and falls back to the last ~5 minutes of RPC logs. Principal and earnings need full history, so without the indexer the UI shows only the exact current value from `accountOf`.
 
-    Note over YourSave: Savings now available as shares
-
-    Payer->>YourSave: withdrawSavingsToAdapter(shares, ...)
-    YourSave->>VaultAdapter: transfer FXRP + call routeSavings()
-    VaultAdapter->>FXRP: approve(FxrpVault, amount)
-    VaultAdapter->>FxrpVault: deposit(amount, user)
-    FxrpVault->>FXRP: transferFrom(adapter, vault, amount)
-    FxrpVault->>FxrpVault: mint shares to user
-```
-
-## Direct Deposit Flow (Bypass YourSave)
-
-Users can also deposit FXRP directly to the vault from their wallet, without going through the YourSave contract:
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant FxrpVault
-    participant FXRP
-
-    User->>FXRP: approve(FxrpVault, amount)
-    User->>FxrpVault: deposit(amount, user)
-    FxrpVault->>FXRP: transferFrom(user, vault, amount)
-    FxrpVault->>FxrpVault: mint shares to user
-```
-
-This is handled by `depositYieldDirect()` in the frontend, which:
-1. Normalizes addresses (EIP-55 checksum)
-2. Approves FXRP to the vault
-3. Calls `vault.deposit.staticCall()` to simulate
-4. Sends the real transaction with `gasLimit: 500_000`
-
-## Yield Targets
-
-| Target | Type | Contract | Status |
-|---|---|---|---|
-| **Firelight** | ERC-4626 Vault | `0x780780D122f075ada1Fa86A18dE2e0763B2526Ec` | ✅ Working |
-| **SparkDEX** | DEX Swap | Via SparkDexAdapter | ⚠️ No valid tokenOut on testnet |
-| **Upshift** | ERC-4626 Vault | `0x24c1a47cD5e8473b64EAB2a94515a196E10C7C81` | ⚠️ Not accepting deposits |
-
-## Frontend Architecture
-
-```
-web/src/
-├── lib/
-│   ├── config.ts          # Contract addresses, RPC URLs, chain config
-│   ├── yoursave.ts        # Service entry (mock vs evm)
-│   ├── yoursave.evm.ts    # EVM contract interactions
-│   ├── yoursave.mock.ts   # In-memory mock for dev
-│   ├── fxrp.ts            # FXRP token utilities
-│   ├── app-state.tsx      # Global state (account, activity, rates)
-│   ├── errors.ts          # Error code mapping
-│   ├── i18n.tsx           # Translations (EN, ID, ZH)
-│   ├── yield.ts           # Yield calculations, share price, vault stats
-│   ├── use-yield-data.ts  # Yield data hook
-│   ├── activity.ts        # On-chain event parsing
-│   ├── rates.ts           # FX rates
-│   └── wallet.tsx         # Wallet connection hook
-├── components/
-│   ├── balance-hero.tsx   # Main balance display (includes vault balance)
-│   ├── yield-deposit-card.tsx      # Deposit savings to yield
-│   ├── yield-direct-deposit-card.tsx # Direct wallet deposit
-│   ├── yield-sources-card.tsx      # Yield protocol selector
-│   ├── yield-position-card.tsx     # Savings position display
-│   └── ui/               # shadcn-style UI components
-├── pages/
-│   ├── dashboard.tsx      # Main dashboard
-│   ├── pay.tsx            # Payment link page
-│   ├── yield.tsx          # Yield management page
-│   ├── faucet.tsx         # FXRP faucet
-│   ├── rules.tsx          # Split/lock/yield settings
-│   ├── withdraw.tsx       # Withdraw spend/savings
-│   ├── activity.tsx       # Transaction history
-│   └── settings.tsx       # App settings
-└── App.tsx                # Router setup
-```
-
-## State Management
-
-The app uses a custom `AppStateProvider` context:
-
-- `account` — YourSave account data (split, spend, shares, lock, yieldTarget)
-- `activity` — Parsed on-chain events (payments, withdrawals, settings changes)
-- `rates` — FX rates for display
-- `busy` — Currently running action key (prevents double-submits)
-- `runAction()` — Executes a contract call with error handling, toast notifications, and 2s RPC sync delay
-
-## Error Handling
-
-All contract errors are mapped to user-friendly i18n keys via `errors.ts`:
-
-```
-Contract error → Error(Contract, #N) → errors.ts lookup → i18n key → Toast message
-```
-
-Custom patterns handle:
-- Wallet rejection/cancellation
-- Wrong network
-- Vault not accepting deposits
-- Insufficient allowance
-- Transaction reverted
+The indexer (`indexer/`) stores an `Activity` row per event, plus running `Saver` (per account) and `Protocol` (global) totals.
