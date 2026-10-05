@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangleIcon,
   DropletsIcon,
@@ -8,11 +7,15 @@ import {
   WalletIcon,
 } from 'lucide-react'
 import { ConnectPrompt } from '@/components/connect-prompt'
+import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FLARE_EXPLORER_URL, FXRP_ADDRESS } from '@/lib/config'
-import { FXRP_DECIMALS } from '@/lib/fxrp'
+import { formatUnits as ethersFormatUnits } from 'ethers'
+import { toast } from 'sonner'
+import { explorerAddressUrl } from '@/lib/config'
+import { AUSD_DECIMALS } from '@/lib/ausd'
+import { errorKey } from '@/lib/errors'
 import { useT } from '@/lib/i18n'
 import { useFaucet } from '@/lib/use-faucet'
 import { useWallet } from '@/lib/wallet'
@@ -21,24 +24,16 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
+// balances for display only: up to 4 decimals, so 18-decimal MON stays readable
 function formatUnits(wei: bigint | null, decimals: number): string {
   if (wei === null) return '—'
-  if (wei === 0n) return '0'
-  const s = wei.toString()
-  if (s.length <= decimals) {
-    const frac = s.padStart(decimals, '0').replace(/0+$/, '')
-    return frac ? `0.${frac}` : '0'
-  }
-  const intPart = s.slice(0, s.length - decimals)
-  const fracPart = s.slice(s.length - decimals).replace(/0+$/, '')
-  return fracPart ? `${intPart}.${fracPart}` : intPart
+  return Number(ethersFormatUnits(wei, decimals)).toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
 
 export function FaucetPage() {
   const t = useT()
   const { address } = useWallet()
   const { faucetBusy, balances, error, hasFunds, runFaucet, refreshBalances } = useFaucet()
-  const navigate = useNavigate()
 
   useEffect(() => {
     if (!address) return
@@ -48,15 +43,20 @@ export function FaucetPage() {
 
   if (!address) return <ConnectPrompt />
 
-  const explorerUrl = `${FLARE_EXPLORER_URL}/address/${address}`
-  const fxrpExplorerUrl = `${FLARE_EXPLORER_URL}/token/${FXRP_ADDRESS}?a=${address}`
+  const explorerUrl = explorerAddressUrl(address)
+
+  const handleClaim = async () => {
+    try {
+      await runFaucet()
+      toast.success(t('faucet.funded'))
+    } catch (e) {
+      toast.error(t(errorKey(e)))
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-xl space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('faucet.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('faucet.caption')}</p>
-      </div>
+    <section className="space-y-5">
+      <PageHeader title={t('faucet.title')} caption={t('faucet.caption')} />
 
       <Card className="rounded-2xl shadow-none">
         <CardHeader className="pb-3">
@@ -82,42 +82,32 @@ export function FaucetPage() {
         <Card className="rounded-2xl shadow-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t('faucet.c2flr')}
+              {t('faucet.mon')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {balances ? (
-              <p className="text-2xl font-semibold">{formatUnits(balances.c2flr, 18)} C2FLR</p>
+              <p className="text-2xl font-semibold">{formatUnits(balances.mon, 18)} MON</p>
             ) : (
               <Skeleton className="h-8 w-32" />
             )}
-            <p className="mt-1 text-xs text-muted-foreground">{t('faucet.c2flrCaption')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('faucet.monCaption')}</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl shadow-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {t('faucet.fxrp')}
+              {t('faucet.ausd')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {balances ? (
-              <p className="text-2xl font-semibold">{formatUnits(balances.fxrp, FXRP_DECIMALS)} FXRP</p>
+              <p className="text-2xl font-semibold">{formatUnits(balances.ausd, AUSD_DECIMALS)} AUSD</p>
             ) : (
               <Skeleton className="h-8 w-32" />
             )}
-            <p className="mt-1 text-xs text-muted-foreground">{t('faucet.fxrpCaption')}</p>
-            {balances && balances.fxrp === 0n && (
-              <a
-                href={fxrpExplorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs text-primary-ink hover:underline"
-              >
-                {t('faucet.checkFxrpToken')} <ExternalLinkIcon className="size-3" />
-              </a>
-            )}
+            <p className="mt-1 text-xs text-muted-foreground">{t('faucet.ausdCaption')}</p>
           </CardContent>
         </Card>
       </div>
@@ -145,19 +135,28 @@ export function FaucetPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button className="flex-1" disabled={faucetBusy} onClick={() => void runFaucet()}>
+            <Button className="flex-1" disabled={faucetBusy} onClick={() => void handleClaim()}>
               {faucetBusy ? (
                 <RefreshCcwIcon className="mr-2 size-4 animate-spin" />
               ) : (
-                <ExternalLinkIcon className="mr-2 size-4" />
+                <DropletsIcon className="mr-2 size-4" />
               )}
-              {t('faucet.openButton')}
+              {t('faucet.claimButton')}
             </Button>
             <Button variant="outline" onClick={() => void refreshBalances()}>
               <RefreshCcwIcon className="mr-2 size-4" />
               {t('common.refresh')}
             </Button>
           </div>
+
+          <a
+            href="https://faucet.monad.xyz"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+          >
+            {t('faucet.fallback')} <ExternalLinkIcon className="size-3" />
+          </a>
 
           {hasFunds && (
             <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm text-primary-ink">
@@ -166,12 +165,6 @@ export function FaucetPage() {
           )}
         </CardContent>
       </Card>
-
-      <div className="flex justify-center">
-        <Button variant="link" onClick={() => navigate('/app')}>
-          {t('faucet.backToApp')}
-        </Button>
-      </div>
-    </div>
+    </section>
   )
 }
