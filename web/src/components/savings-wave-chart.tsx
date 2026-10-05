@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { usdcToNumber } from '@/lib/format'
+import { ausdToNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { SavingsHistoryPoint } from '@/lib/yield'
 
@@ -43,9 +43,9 @@ type SavingsWaveChartProps = {
 export function SavingsWaveChart({ history, currentValue, className }: SavingsWaveChartProps) {
   const gradientId = useId()
 
-  const values = [0, ...history.map((p) => usdcToNumber(p.principal))]
+  const values = [0, ...history.map((p) => ausdToNumber(p.principal))]
   const hasLive = currentValue !== null
-  if (hasLive) values.push(usdcToNumber(currentValue))
+  if (hasLive) values.push(ausdToNumber(currentValue))
 
   const max = Math.max(...values, 0)
   const min = Math.min(...values, 0)
