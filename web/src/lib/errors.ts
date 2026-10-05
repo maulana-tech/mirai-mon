@@ -1,3 +1,4 @@
+import { isMeraError } from '@category-labs/mera'
 import type { MessageKey } from '@/lib/i18n'
 
 const CONTRACT_ERROR_KEYS: Record<number, MessageKey> = {
@@ -9,11 +10,11 @@ const CONTRACT_ERROR_KEYS: Record<number, MessageKey> = {
   6: 'errors.lockNotExtended',
   7: 'errors.emptyWithdrawal',
   8: 'errors.lockTooFar',
-  9: 'errors.switchTargetWithBalance',
-  1000: 'errors.paused',
+  11: 'errors.unauthorized',
+  12: 'errors.goalTooLarge',
+  13: 'errors.generic',
 }
 
-// wallet kit rejects with plain { code, message } objects, not Error instances
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'object' && e !== null && 'message' in e) {
@@ -24,18 +25,22 @@ function errorMessage(e: unknown): string {
 }
 
 export function errorKey(e: unknown): MessageKey {
+  if (isMeraError(e)) {
+    if (e.code === 'PRF_UNAVAILABLE' || e.code === 'CRYPTO_UNAVAILABLE') return 'errors.passkeyUnsupported'
+    if (e.code === 'PASSKEY_OPERATION_FAILED') return 'errors.walletCancelled'
+    if (e.code === 'DECRYPT_FAILED' || e.code === 'VAULT_FORMAT_INVALID') return 'errors.goalDecrypt'
+    return 'errors.generic'
+  }
   const text = `${String(e)} ${errorMessage(e)}`
   const contract = /Error\(Contract, #(\d+)\)/.exec(text)
   if (contract) return CONTRACT_ERROR_KEYS[Number(contract[1])] ?? 'errors.generic'
-  if (text.includes('faucet_unavailable')) return 'errors.faucetUnavailable'
-  if (text.includes('faucet_maybe_funded')) return 'errors.faucetAlreadyFunded'
-  if (text.includes('wallet_not_found')) return 'common.connectFirst'
-  if (text.includes('wallet_timeout')) return 'errors.walletTimeout'
-  if (/reject|declin|denied|closed/i.test(text)) return 'errors.walletCancelled'
-  if (/wrong network|coston2/i.test(text)) return 'errors.wrongNetwork'
-  if (/vault.*not accepting|maxDeposit|not accepting deposits/i.test(text)) return 'errors.vaultNotAccepting'
-  if (/insufficient allowance|allowance/i.test(text)) return 'errors.insufficientAllowance'
+  if (text.includes('faucet_busy')) return 'errors.faucetBusy'
+  if (text.includes('faucet_unavailable') || text.includes('faucet_failed')) return 'errors.faucetUnavailable'
+  if (text.includes('insufficient_ausd')) return 'errors.insufficientBalance'
+  if (text.includes('wallet_not_connected')) return 'common.connectFirst'
+  if (text.includes('wallet_passkey_mismatch')) return 'errors.passkeyMismatch'
+  if (/INSUFFICIENT_FUNDS|insufficient funds|insufficient balance for transfer/i.test(text)) return 'errors.noGas'
+  if (/NotAllowedError|reject|declin|denied|cancel/i.test(text)) return 'errors.walletCancelled'
   if (/CALL_EXCEPTION|execution reverted|transaction.*reverted/i.test(text)) return 'errors.txReverted'
-  if (/Unauthorized/i.test(text)) return 'errors.unauthorized'
   return 'errors.generic'
 }
