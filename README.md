@@ -1,10 +1,10 @@
 <div align="center">
   <img src="web/public/favicon.svg" width="88" alt="Mirai">
   <h1>Mirai</h1>
-  <p>Get paid in digital dollars. A slice of every payment saves itself and earns yield, on Monad.</p>
+  <p>Get paid in digital dollars. A slice of every payment saves itself, then earns yield or invests, on Monad.</p>
 
   <img src="https://img.shields.io/badge/network-Monad%20Testnet-836ef9.svg" alt="Monad Testnet">
-  <img src="https://img.shields.io/badge/asset-AUSD-22c55e.svg" alt="AUSD">
+  <img src="https://img.shields.io/badge/asset-AUSD-0647b3.svg" alt="AUSD">
   <img src="https://img.shields.io/badge/accounts-Mera%20passkeys-0ea5e9.svg" alt="Mera passkeys">
 </div>
 
@@ -12,7 +12,7 @@
 
 ## What is Mirai?
 
-Mirai splits every payment you receive into two pockets in the same transaction: a spendable balance, and savings that go straight into an ERC-4626 yield vault. Saving happens before you have a chance to spend, with no transfers to remember.
+Mirai splits every payment you receive into two pockets in the same transaction: a spendable balance, and savings that go straight into the strategy you picked: one of three ERC-4626 yield vaults, or the **Smart Money** basket (BTC/ETH weighted by what Nansen's smart money holds on Monad). Saving happens before you have a chance to spend, with no transfers to remember.
 
 It is built for people who don't think of themselves as crypto users. You sign in with a passkey (Face ID or fingerprint), there is no seed phrase or wallet extension, and new accounts are funded with gas automatically, so the blockchain stays out of sight.
 
@@ -23,13 +23,14 @@ flowchart LR
     P[Payer<br/>passkey account] -->|payWithPermit<br/>one transaction| C[Mirai]
     C -->|80% spend| S[Spendable balance]
     C -->|20% deposit| V[Strategy vault<br/>ERC-4626]
-    V -->|share price rises<br/>as yield arrives| R[Recipient savings]
+    V -->|yield: share price rises<br/>Smart Money: follows BTC/ETH| R[Recipient savings]
+    N[Nansen smart money<br/>+ Chainlink prices] -.->|basket weights| V
 ```
 
 1. **Sign in with a passkey.** [Mera](https://mera.category.xyz) derives the account key from the passkey's PRF output; a signing session keeps every later signature prompt-free. Clearing storage or switching device restores the same account from the synced passkey.
 2. **Get paid.** Share `/pay/:address`. The payer signs an EIP-2612 permit locally and sends one `payWithPermit` transaction, so there is no separate approve.
 3. **Auto-split.** The contract applies the recipient's split (default 20%) and deposits the savings slice into the vault in the same transaction.
-4. **Earn and withdraw.** Savings are vault shares whose value rises as yield arrives. Spendable money can be withdrawn any time; savings can be time-locked toward a goal.
+4. **Earn or invest, then withdraw.** Savings are vault shares: in a yield strategy their value rises as yield arrives; in Smart Money it follows the market (and can fall). Spendable money can be withdrawn any time; savings can be time-locked toward a goal, kept encrypted to the passkey.
 
 ## Built on Monad
 
@@ -39,7 +40,22 @@ flowchart LR
 | **AUSD (Agora)** | A fully backed, 6-decimal USD stablecoin with EIP-2612 permit, so approve + pay is a single transaction. |
 | **Mera passkey accounts** | The whole account layer: no extension, no seed phrase, no custody backend. |
 | **Gas charged on the limit** | Gas limits come from `estimateGas` + 10%, never fixed padding, so users don't overpay. |
+| **Chainlink push feeds on Monad** | BTC/USD and ETH/USD price the Smart Money basket and the Market page, with no keeper paying for updates. |
 | **100-block `eth_getLogs` cap** | Full activity history comes from an [Envio](https://envio.dev) HyperIndex indexer (`indexer/`); the app falls back to the last ~5 minutes of RPC logs. |
+
+## Deployed on Monad testnet
+
+All contracts are verified on Sourcify (MonadVision). Source of truth: [`deployments.json`](deployments.json).
+
+| Contract | Address |
+|---|---|
+| `Mirai` | [`0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1`](https://testnet.monadscan.com/address/0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1) |
+| Conservative vault (4%) + streamer | [`0x6e18…e731`](https://testnet.monadscan.com/address/0x6e18fd1e7310DEBbaF42CbEDb8E67351d13ee731) · [`0xd119…B82B`](https://testnet.monadscan.com/address/0xd1195a8B1D9579CfcEDe2B3f819cbCf6B334B82B) |
+| Balanced vault (8%, default) + streamer | [`0xb3d6…942e`](https://testnet.monadscan.com/address/0xb3d6Ba8127943C0F9Af129845C5EE7498c96942e) · [`0xdC6a…3D24`](https://testnet.monadscan.com/address/0xdC6aB7891A5F8E97F91Dd42B59D96D5D9f703D24) |
+| Growth vault (12%) + streamer | [`0x7B0c…5394`](https://testnet.monadscan.com/address/0x7B0c991591C8dB9C983F48835aD4237068615394) · [`0x6F1C…4e`](https://testnet.monadscan.com/address/0x6F1C6f95F49196B5b8Cb769b16B9DE8C51f93a4e) |
+| Smart Money `MarketVault` | [`0x1024D899fe9Bf3B1588358eC36825aF74a844ec3`](https://testnet.monadscan.com/address/0x1024D899fe9Bf3B1588358eC36825aF74a844ec3) |
+| AUSD (Agora) | [`0xa901…22dC`](https://testnet.monadscan.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) |
+| Chainlink BTC/USD · ETH/USD | [`0x12C0…1715`](https://testnet.monadscan.com/address/0x12C0F44368a02081ce58a936d1C1F606BB301715) · [`0x5c8c…6d31`](https://testnet.monadscan.com/address/0x5c8c8482f064049248F86D9F4aFa4B1f2F5b6d31) |
 
 ## Yield: strategies, honestly
 
@@ -96,6 +112,7 @@ The Yield page also has a **projection** that compares the three yield strategie
 ├── web/              # App (React 19, Vite, ethers v6, Mera)
 │   ├── api/onboard.ts      # Vercel function: gas + test AUSD for new accounts
 │   ├── api/market.ts       # Vercel function: Nansen smart-money holdings → basket weights
+│   ├── src/pages/market.tsx # Market: Chainlink price board, Smart Money, pool simulator
 │   └── scripts/            # Runnable checks (signer equivalence, fork end-to-end)
 ├── indexer/          # Envio HyperIndex: Activity feed + per-saver and protocol totals
 ├── docs/             # Architecture, deployment, development
