@@ -1,15 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
+/* Landing page palette + type (editorial cobalt design). */
+@theme {
+  --color-cobalt: #0647b3;
+  --color-ink: #151515;
+  --color-cyan: #6fe3ff;
+  --font-grotesk: 'Host Grotesk', sans-serif;
+  --font-fragment: 'Fragment Mono', monospace;
+}
+
+/* light pulse running along landing traces (paths use pathLength=1000) */
+.trace-pulse {
+  stroke-dasharray: 70 930;
+  animation: trace-pulse 7s linear infinite;
+}
+@keyframes trace-pulse {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trace-pulse { animation: none; opacity: 0; }
+}
+
 @theme inline {
-  --font-heading: var(--font-serif);
-  --font-sans: 'DM Sans', sans-serif;
-  --font-serif: 'Cormorant Garamond', serif;
-  --font-mono: 'Space Mono', monospace;
+  --font-heading: var(--font-sans);
+  --font-sans: 'Host Grotesk', sans-serif;
+  --font-mono: 'Fragment Mono', monospace;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -42,68 +62,63 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ─── Editorial color tokens ─── */
+/* ─── Color tokens: cobalt on warm off-white, ink in dark mode ─── */
 :root {
-  /* Parchment / paper base */
-  --background: #eee8d8;
-  --foreground: #193d2d;
-  /* Cards */
-  --card: #f4ede0;
-  --card-foreground: #193d2d;
-  --popover: #f4ede0;
-  --popover-foreground: #193d2d;
-  /* Primary: deep forest green */
-  --primary: #1c4934;
-  --primary-foreground: #f2ecda;
-  --primary-ink: #1c4934;
-  /* Secondary: mid green */
-  --secondary: #3d7659;
-  --secondary-foreground: #f2ecda;
-  /* Muted */
-  --muted: #c9bf9f;
-  --muted-foreground: #526457;
-  /* Accent: gold */
-  --accent: #d5aa61;
-  --accent-foreground: #193d2d;
-  /* Destructive */
-  --destructive: #c73e1d;
-  /* Borders */
-  --border: #c9bfa5;
-  --input: #c9bfa5;
-  --ring: #1c4934;
-  /* Gold */
-  --gold: #d5aa61;
-  --gold-ink: #8f6414;
-  /* Growth */
-  --growth: #3d7659;
-  --growth-ink: #1c4934;
+  --background: #f4f4f2;
+  --foreground: #151515;
+  --card: #ffffff;
+  --card-foreground: #151515;
+  --popover: #ffffff;
+  --popover-foreground: #151515;
+  /* Primary: cobalt */
+  --primary: #0647b3;
+  --primary-foreground: #ffffff;
+  --primary-ink: #0647b3;
+  --secondary: #ececea;
+  --secondary-foreground: #151515;
+  --muted: #ececea;
+  --muted-foreground: #5e5e5b;
+  --accent: #e7eefa;
+  --accent-foreground: #0647b3;
+  --destructive: #c4321c;
+  --border: #e0e0dc;
+  --input: #d3d3cf;
+  --ring: #0647b3;
+  /* Savings highlight (earnings, savings pocket): cyan family */
+  --gold: #6fe3ff;
+  --gold-ink: #0a54cc;
+  /* Growth: lighter cobalt */
+  --growth: #3d7bea;
+  --growth-ink: #0647b3;
   --radius: 0.75rem;
 }
 
 .dark {
-  --background: #101c19;
-  --foreground: #eee8d8;
-  --card: #173f2d;
-  --card-foreground: #eee8d8;
-  --popover: #173f2d;
-  --popover-foreground: #eee8d8;
-  --primary: #3d7659;
-  --primary-foreground: #101c19;
-  --primary-ink: #b7d6bd;
-  --secondary: #5a9e7a;
-  --secondary-foreground: #101c19;
-  --muted: #1c4934;
-  --muted-foreground: #a8b8a6;
-  --accent: #d5aa61;
-  --accent-foreground: #101c19;
-  --destructive: #e05a3a;
-  --border: #2a5c44;
-  --input: #2a5c44;
-  --ring: #3d7659;
-  --gold: #d5aa61;
-  --gold-ink: #e4c17b;
-  --growth: #5a9e7a;
-  --growth-ink: #b7d6bd;
+  /* Dark = inverted: white page backdrop, cobalt cards with white text. */
+  --background: #0b4fc2;
+  --foreground: #ffffff;
+  --card: #0647b3;
+  --card-foreground: #ffffff;
+  --popover: #0647b3;
+  --popover-foreground: #ffffff;
+  /* Primary actions turn white on cobalt cards */
+  --primary: #ffffff;
+  --primary-foreground: #0647b3;
+  --primary-ink: #a9dcff;
+  --secondary: #0b55cc;
+  --secondary-foreground: #ffffff;
+  --muted: #0b55cc;
+  --muted-foreground: #c3d5f7;
+  --accent: #1460d8;
+  --accent-foreground: #ffffff;
+  --destructive: #ffb3a7;
+  --border: #3a6fcc;
+  --input: #4a7dd4;
+  --ring: #6fe3ff;
+  --gold: #6fe3ff;
+  --gold-ink: #6fe3ff;
+  --growth: #a9dcff;
+  --growth-ink: #ffffff;
 }
 
 @utility no-scrollbar {
@@ -129,7 +144,7 @@
 
 /* ─── Section label pattern ─── */
 @utility section-label {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Fragment Mono', monospace;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.23em;
@@ -207,10 +222,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-color: #eee8d8;
-  }
-  .dark body {
-    background-color: #101c19;
   }
   html {
     @apply font-sans;
