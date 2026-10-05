@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { CheckIcon, CopyIcon, ExternalLinkIcon, LogOutIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { PasskeyDialog } from '@/components/passkey-dialog'
 import { AddressAvatar } from '@/components/brand/address-avatar'
-import { LogoWordmark } from '@/components/brand/logo'
+import { MiraiMark } from '@/components/brand/logo'
+import { Traces } from '@/components/landing/kit'
 import { TokenIcon } from '@/components/brand/token-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,13 +13,14 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { useAppState } from '@/lib/app-state'
 import { isValidRecipientAddress } from '@/lib/address'
-import { yoursave } from '@/lib/yoursave'
+import { mirai } from '@/lib/mirai'
 import { explorerTxUrl } from '@/lib/config'
 import { errorKey } from '@/lib/errors'
-import { parseFxrp, shortHex } from '@/lib/format'
+import { parseAusd, shortHex } from '@/lib/format'
 import { formatMoney, useT } from '@/lib/i18n'
 import { useSettings } from '@/lib/settings'
 import { useScrollLock } from '@/lib/use-scroll-lock'
+import { requestTestFunds } from '@/lib/use-faucet'
 import { useWallet } from '@/lib/wallet'
 
 const QUICK_AMOUNTS = ['25', '50', '100']
@@ -50,7 +53,8 @@ function AddressChip({ address }: { address: string }) {
 
 function PayCard({ recipient }: { recipient: string }) {
   const t = useT()
-  const { address, connecting, connect, disconnect } = useWallet()
+  const { address, connecting, disconnect } = useWallet()
+  const [signInOpen, setSignInOpen] = useState(false)
   const { rates, busy, runAction } = useAppState()
   const { locale } = useSettings()
   const [searchParams] = useSearchParams()
@@ -58,7 +62,7 @@ function PayCard({ recipient }: { recipient: string }) {
   const [value, setValue] = useState(() => {
     const preset = (searchParams.get('amount') ?? '').trim()
     try {
-      return parseFxrp(preset) > 0n ? preset : ''
+      return parseAusd(preset) > 0n ? preset : ''
     } catch {
       return ''
     }
@@ -70,7 +74,7 @@ function PayCard({ recipient }: { recipient: string }) {
 
   useEffect(() => {
     let cancelled = false
-    yoursave.getAccount(recipient).then(
+    mirai.getAccount(recipient).then(
       (acc) => {
         if (!cancelled) setSplitPct(Math.round(acc.splitBps / 100))
       },
@@ -81,20 +85,25 @@ function PayCard({ recipient }: { recipient: string }) {
     }
   }, [recipient])
 
-  const handleConnect = async () => {
+  const [funding, setFunding] = useState(false)
+  // Payers arriving from a link often have no test AUSD yet; top them up without leaving the page.
+  const getFunds = async () => {
+    if (!address) return
+    setFunding(true)
     try {
-      await connect()
+      await requestTestFunds(address)
+      toast.success(t('wallet.funded'))
     } catch (e) {
-      const key = errorKey(e)
-      if (key === 'errors.walletCancelled') return
-      toast.error(t(key))
+      toast.error(t(errorKey(e)))
+    } finally {
+      setFunding(false)
     }
   }
 
   const handlePay = async () => {
     let parsed: bigint
     try {
-      parsed = parseFxrp(value)
+      parsed = parseAusd(value)
       if (parsed <= 0n) throw new Error('invalid amount')
     } catch {
       toast.error(t('errors.invalidAmount'))
@@ -102,22 +111,22 @@ function PayCard({ recipient }: { recipient: string }) {
     }
     if (!address) return
     const result = await runAction('paylink', 'success.linkPaid', () =>
-      yoursave.pay(address, recipient, parsed),
+      mirai.pay(address, recipient, parsed),
     )
     if (result) setPaid({ amount: parsed, hash: result.hash })
   }
 
   if (paid !== null) {
     return (
-      <Card className="w-full max-w-md rounded-2xl shadow-none backdrop-blur-sm bg-card/80">
+      <Card className="w-full max-w-md rounded-2xl shadow-none">
         <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary-ink">
             <CheckIcon className="size-7" />
           </span>
           <p className="text-xl font-semibold tracking-tight">{t('pay.successTitle')}</p>
           <p className="flex items-center gap-2 text-2xl font-semibold tracking-tight tabular-nums">
-            <TokenIcon token="fxrp" size={36} />
-            {formatMoney(paid.amount, 'fxrp', rates, locale)}
+            <TokenIcon token="ausd" size={36} />
+            {formatMoney(paid.amount, 'ausd', rates, locale)}
           </p>
           <p className="text-sm text-muted-foreground">
             {t('pay.successBody', { name: displayName })}
@@ -145,7 +154,7 @@ function PayCard({ recipient }: { recipient: string }) {
   }
 
   return (
-    <Card className="w-full max-w-md rounded-2xl shadow-none backdrop-blur-sm bg-card/80">
+    <Card className="w-full max-w-md rounded-2xl shadow-none">
       <CardHeader className="items-center text-center">
         <div className="flex items-center justify-center gap-3">
           <AddressAvatar address={recipient} size={40} />
@@ -161,7 +170,7 @@ function PayCard({ recipient }: { recipient: string }) {
       <CardContent className="space-y-3">
         <div className="relative">
           <TokenIcon
-            token="fxrp"
+            token="ausd"
             size={36}
             className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
           />
@@ -226,6 +235,14 @@ function PayCard({ recipient }: { recipient: string }) {
             >
               {busy === 'paylink' ? `${t('common.loading')}...` : t('pay.button')}
             </Button>
+            <button
+              type="button"
+              disabled={funding}
+              onClick={() => void getFunds()}
+              className="text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-60"
+            >
+              {funding ? `${t('common.loading')}...` : t('pay.needFunds')}
+            </button>
           </>
         ) : (
           <>
@@ -233,11 +250,12 @@ function PayCard({ recipient }: { recipient: string }) {
               size="lg"
               className="w-full"
               disabled={connecting}
-              onClick={() => void handleConnect()}
+              onClick={() => setSignInOpen(true)}
             >
               {connecting ? `${t('topbar.connecting')}...` : t('pay.connectCta')}
             </Button>
             <p className="text-center text-xs text-muted-foreground">{t('pay.connectCaption')}</p>
+            <PasskeyDialog open={signInOpen} onOpenChange={setSignInOpen} />
           </>
         )}
       </CardFooter>
@@ -249,7 +267,7 @@ function InvalidLink() {
   const t = useT()
 
   return (
-    <Card className="w-full max-w-md rounded-2xl shadow-none backdrop-blur-sm bg-card/80">
+    <Card className="w-full max-w-md rounded-2xl shadow-none">
       <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
         <p className="text-xl font-semibold tracking-tight">{t('pay.invalidTitle')}</p>
         <p className="text-sm text-muted-foreground">{t('errors.invalidPayAddress')}</p>
@@ -269,26 +287,23 @@ export function PayPage() {
   useScrollLock()
 
   return (
-    <div className="relative h-svh">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center"
-        style={{ backgroundImage: 'url(/assets/section1-bg.png)' }}
-      />
-      <div className="pointer-events-none fixed inset-0 z-0 bg-black/30" />
+    <div className="relative h-svh overflow-hidden bg-cobalt dark:bg-white">
+      {/* widened and shifted left so the bend shows beside the card instead of behind it */}
+      <Traces className="top-[30vh] -left-[60%] h-[46vh] w-[160%] text-white dark:text-cobalt" />
       <div className="no-scrollbar relative z-10 flex h-full flex-col overflow-y-auto">
         <header className="flex items-center justify-between px-6 py-4">
-          <Link to="/">
-            <LogoWordmark />
+          <Link to="/" className="inline-flex items-center gap-2.5 text-white dark:text-cobalt">
+            <MiraiMark className="h-5" />
+            <span className="font-fragment text-[15px] tracking-[0.25em] uppercase">Mirai</span>
           </Link>
-          <Badge variant="outline" className="text-muted-foreground">
+          <Badge variant="outline" className="border-white/30 text-white/80 dark:border-cobalt/30 dark:text-cobalt/80">
             {t('topbar.testnet')}
           </Badge>
         </header>
         <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center sm:py-4">
           {valid ? <PayCard recipient={recipient} /> : <InvalidLink />}
         </main>
-        <footer className="px-6 py-5 text-center text-sm text-muted-foreground">
+        <footer className="px-6 py-5 text-center font-fragment text-[11px] text-white/60 uppercase dark:text-cobalt/60">
           {t('landing.footer')}
         </footer>
       </div>
