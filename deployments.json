@@ -1,11 +1,39 @@
 {
-  "coston2": {
-    "yoursave": "0x588DeC15D915659E8BF36c01e662479916301d3A",
-    "sparkdexAdapter": "0xD04A92C83AFe71f4f69F9FAD0A33229BFBdE33E6",
-    "vaultAdapter": "0x3c13BDd505DE69bB0DF0a2e68A0Cd93a44beB0b4",
-    "fxrp": "0x0b6A3645c240605887a5532109323A3E12273dc7",
-    "sparkdexRouter": "0x4a1E5A90e9943467FAd1acea1E7F0e5e88472a1e",
-    "firelightVault": "0x780780D122f075ada1Fa86A18dE2e0763B2526Ec",
-    "upshiftVault": "0x24c1a47cD5e8473b64EAB2a94515a196E10C7C81"
+  "monad_testnet": {
+    "chainId": 10143,
+    "mirai": "0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1",
+    "deployBlock": 68343081,
+    "ausd": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC",
+    "ausdFaucet": "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C",
+    "strategies": [
+      {
+        "name": "conservative",
+        "aprBps": 400,
+        "vault": "0x6e18fd1e7310DEBbaF42CbEDb8E67351d13ee731",
+        "streamer": "0xd1195a8B1D9579CfcEDe2B3f819cbCf6B334B82B"
+      },
+      {
+        "name": "balanced",
+        "aprBps": 800,
+        "vault": "0xb3d6Ba8127943C0F9Af129845C5EE7498c96942e",
+        "streamer": "0xdC6aB7891A5F8E97F91Dd42B59D96D5D9f703D24"
+      },
+      {
+        "name": "growth",
+        "aprBps": 1200,
+        "vault": "0x7B0c991591C8dB9C983F48835aD4237068615394",
+        "streamer": "0x6F1C6f95F49196B5b8Cb769b16B9DE8C51f93a4e"
+      },
+      {
+        "name": "smartMoney",
+        "vault": "0x1024D899fe9Bf3B1588358eC36825aF74a844ec3",
+        "basket": {
+          "BTC/USD": "0x12C0F44368a02081ce58a936d1C1F606BB301715",
+          "ETH/USD": "0x5c8c8482f064049248F86D9F4aFa4B1f2F5b6d31"
+        },
+        "curator": "0x59cC2ACdf03BD622428de6520A647afaF7382d98",
+        "oracle": "chainlink"
+      }
+    ]
   }
 }
