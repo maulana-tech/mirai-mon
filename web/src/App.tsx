@@ -1,29 +1,26 @@
 import { useEffect, useState } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { WagmiProvider } from 'wagmi'
 import { AppShell } from '@/components/app-shell'
 import { NotFoundContent } from '@/components/not-found-content'
 import { Toaster } from '@/components/ui/sonner'
 import { AppStateProvider } from '@/lib/app-state'
 import { SettingsProvider } from '@/lib/settings'
-import { config } from '@/lib/wagmi'
 import { ActivityPage } from '@/pages/activity'
 import { Dashboard } from '@/pages/dashboard'
 import { FaucetPage } from '@/pages/faucet'
 import { Landing } from '@/pages/landing'
+import { MarketPage } from '@/pages/market'
 import { NotFoundPage } from '@/pages/not-found'
 import { PayPage } from '@/pages/pay'
 import { PaymentLinkPage } from '@/pages/payment-link'
 import { RulesPage } from '@/pages/rules'
+import { SendPage } from '@/pages/send'
 import { SettingsPage } from '@/pages/settings'
 import { WithdrawPage } from '@/pages/withdraw'
 import { YieldPage } from '@/pages/yield'
 
 import { ReactLenis } from 'lenis/react'
-
-const queryClient = new QueryClient()
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -44,36 +41,34 @@ export function App() {
     <ReactLenis root options={{ duration: reducedMotion ? 0 : 1.1 }}>
       <ThemeProvider
         attribute="class"
-        storageKey="yoursave:theme"
+        storageKey="mirai:theme"
         defaultTheme="light"
         disableTransitionOnChange
       >
         <SettingsProvider>
-          <WagmiProvider config={config}>
-            <QueryClientProvider client={queryClient}>
-              <AppStateProvider>
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/pay/:address" element={<PayPage />} />
-                    <Route path="/app" element={<AppShell />}>
-                      <Route index element={<Dashboard />} />
-                      <Route path="activity" element={<ActivityPage />} />
-                      <Route path="faucet" element={<FaucetPage />} />
-                      <Route path="yield" element={<YieldPage />} />
-                      <Route path="withdraw" element={<WithdrawPage />} />
-                      <Route path="rules" element={<RulesPage />} />
-                      <Route path="link" element={<PaymentLinkPage />} />
-                      <Route path="settings" element={<SettingsPage />} />
-                      <Route path="*" element={<NotFoundContent />} />
-                    </Route>
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
-                </BrowserRouter>
-                <Toaster />
-              </AppStateProvider>
-            </QueryClientProvider>
-          </WagmiProvider>
+          <AppStateProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/pay/:address" element={<PayPage />} />
+                <Route path="/app" element={<AppShell />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="activity" element={<ActivityPage />} />
+                  <Route path="faucet" element={<FaucetPage />} />
+                  <Route path="yield" element={<YieldPage />} />
+                  <Route path="market" element={<MarketPage />} />
+                  <Route path="send" element={<SendPage />} />
+                  <Route path="withdraw" element={<WithdrawPage />} />
+                  <Route path="rules" element={<RulesPage />} />
+                  <Route path="link" element={<PaymentLinkPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="*" element={<NotFoundContent />} />
+                </Route>
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </BrowserRouter>
+            <Toaster />
+          </AppStateProvider>
         </SettingsProvider>
       </ThemeProvider>
     </ReactLenis>
