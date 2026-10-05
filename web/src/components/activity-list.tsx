@@ -4,13 +4,14 @@ import {
   ExternalLinkIcon,
   LockIcon,
   SlidersHorizontalIcon,
+  TrendingUpIcon,
 } from 'lucide-react'
 import { AddressAvatar } from '@/components/brand/address-avatar'
 import { TokenIcon } from '@/components/brand/token-icon'
 import { Skeleton } from '@/components/ui/skeleton'
-import { YieldRouteBadge } from '@/components/yield-route-badge'
 import { type ActivityItem } from '@/lib/activity'
 import { useAppState } from '@/lib/app-state'
+import { STRATEGIES } from '@/lib/strategies'
 import { explorerTxUrl } from '@/lib/config'
 import { formatDate, formatDateTime, formatMoney, useT } from '@/lib/i18n'
 import { useSettings } from '@/lib/settings'
@@ -23,9 +24,10 @@ const ICONS: Record<ActivityItem['kind'], typeof LockIcon> = {
   wd_save: ArrowUpRightIcon,
   split: SlidersHorizontalIcon,
   lock: LockIcon,
+  strategy: TrendingUpIcon,
 }
 
-// pay/wd_spend/wd_save all move real USDC, so they share the brand yellow; split/lock
+// pay/wd_spend/wd_save all move real AUSD, so they share the brand cobalt; split/lock/strategy
 // are rule changes, sharing the Rules page's accent tone. Used on the large 36px tile,
 // where a soft wash reads fine.
 const KIND_TINT: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
@@ -34,6 +36,7 @@ const KIND_TINT: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
   wd_save: { bg: 'bg-primary/15', fg: 'text-primary-ink' },
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   lock: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  strategy: { bg: 'bg-accent', fg: 'text-accent-foreground' },
 }
 
 // Same kind colors, but solid instead of a wash: the corner badge on token rows is only
@@ -44,6 +47,7 @@ const KIND_TINT_SOLID: Record<ActivityItem['kind'], { bg: string; fg: string }> 
   wd_save: { bg: 'bg-primary', fg: 'text-primary-foreground' },
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   lock: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  strategy: { bg: 'bg-accent', fg: 'text-accent-foreground' },
 }
 
 type ActivityListProps = {
@@ -54,7 +58,7 @@ type ActivityListProps = {
 const TOKEN_KINDS: readonly ActivityItem['kind'][] = ['pay', 'wd_spend', 'wd_save']
 
 export function ActivityList({ items, loading }: ActivityListProps) {
-  const { account, rates } = useAppState()
+  const { rates } = useAppState()
   const { locale, primaryCurrency } = useSettings()
   const { address } = useWallet()
   const t = useT()
@@ -74,6 +78,8 @@ export function ActivityList({ items, loading }: ActivityListProps) {
         return t('activity.split', { pct: (item.bps ?? 0) / 100 })
       case 'lock':
         return t('activity.lock', { date: formatDate(item.until ?? 0n, locale) })
+      case 'strategy':
+        return t('activity.strategy', { name: t(STRATEGIES[item.strategy ?? 1]?.name ?? 'strategy.balanced') })
     }
   }
 
@@ -91,17 +97,16 @@ export function ActivityList({ items, loading }: ActivityListProps) {
     return <p className="text-sm text-muted-foreground">{t('activity.empty')}</p>
   }
 
-  const showRoute = account !== null && items.some((item) => item.kind === 'pay' || item.kind === 'wd_save')
-
   return (
     <div className="space-y-3">
-      {showRoute && <YieldRouteBadge target={account.yieldTarget} />}
       <ul className="-mx-2 space-y-1">
         {items.map((item) => {
           const Icon = ICONS[item.kind]
           const tint = KIND_TINT[item.kind]
           const externalPayer =
-            item.kind === 'pay' && item.from !== undefined && item.from !== address
+            item.kind === 'pay' &&
+            item.from !== undefined &&
+            item.from.toLowerCase() !== address?.toLowerCase()
           return (
             <li key={item.id}>
               <a
@@ -117,7 +122,7 @@ export function ActivityList({ items, loading }: ActivityListProps) {
                   ) : TOKEN_KINDS.includes(item.kind) ? (
                     // token logo alone fills its own circle edge-to-edge, so the currency
                     // is recognizable at a glance without extra padding diluting it
-                    <TokenIcon token="fxrp" size={36} />
+                    <TokenIcon token="ausd" size={36} />
                   ) : (
                     <span
                       className={cn(
@@ -131,7 +136,7 @@ export function ActivityList({ items, loading }: ActivityListProps) {
                   {TOKEN_KINDS.includes(item.kind) &&
                     (externalPayer ? (
                       <span className="absolute -right-1 -bottom-1 flex rounded-full ring-2 ring-card">
-                        <TokenIcon token="fxrp" size={18} />
+                        <TokenIcon token="ausd" size={18} />
                       </span>
                     ) : (
                       <span
