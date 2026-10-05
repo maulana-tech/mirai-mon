@@ -15,7 +15,7 @@ const FILTERS: { key: FilterKey; label: MessageKey; kinds: ActivityItem['kind'][
   { key: 'all', label: 'activity.filterAll', kinds: null },
   { key: 'payments', label: 'activity.filterPayments', kinds: ['pay'] },
   { key: 'withdrawals', label: 'activity.filterWithdrawals', kinds: ['wd_spend', 'wd_save'] },
-  { key: 'changes', label: 'activity.filterChanges', kinds: ['split', 'lock'] },
+  { key: 'changes', label: 'activity.filterChanges', kinds: ['split', 'lock', 'strategy'] },
 ]
 
 export function ActivityPage() {
@@ -32,7 +32,7 @@ export function ActivityPage() {
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">{t('activity.title')}</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-white dark:text-cobalt">{t('activity.title')}</h2>
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
             <Button
@@ -41,10 +41,10 @@ export function ActivityPage() {
               size="sm"
               aria-pressed={filter === f.key}
               className={cn(
-                'rounded-full',
-                // secondary now reads as the teal spending tone, so the active pill tints brand yellow
+                'rounded-full text-white/80 hover:bg-white/10 hover:text-white dark:text-cobalt/80 dark:hover:bg-cobalt/10 dark:hover:text-cobalt',
+                // the active filter is a pill in the backdrop's opposite colour
                 filter === f.key &&
-                  'bg-primary/10 text-primary-ink hover:bg-primary/15 hover:text-primary-ink',
+                  'bg-white text-cobalt hover:bg-white hover:text-cobalt dark:bg-cobalt dark:text-white dark:hover:bg-cobalt dark:hover:text-white',
               )}
               onClick={() => setFilter(f.key)}
             >
