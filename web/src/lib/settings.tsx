@@ -8,7 +8,7 @@ import {
 } from 'react'
 
 export type Locale = 'en' | 'id' | 'zh'
-export type PrimaryCurrency = 'usd' | 'idr' | 'fxrp' | 'cny'
+export type PrimaryCurrency = 'usd' | 'idr' | 'ausd' | 'cny'
 
 type SettingsContextValue = {
   locale: Locale
@@ -17,21 +17,27 @@ type SettingsContextValue = {
   setPrimaryCurrency: (currency: PrimaryCurrency) => void
 }
 
-const LOCALE_KEY = 'yoursave:locale'
-const CURRENCY_KEY = 'yoursave:currency'
+const LOCALE_KEY = 'mirai:locale'
+const CURRENCY_KEY = 'mirai:currency'
 
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 function initialLocale(): Locale {
   const stored = localStorage.getItem(LOCALE_KEY)
   if (stored === 'en' || stored === 'id' || stored === 'zh') return stored
+  const browser = navigator.language.toLowerCase()
+  if (browser.startsWith('id')) return 'id'
+  if (browser.startsWith('zh')) return 'zh'
   return 'en'
 }
 
-// the fiat shown alongside a FXRP-primary display follows the chosen
+// First-time users see money in their own currency; AUSD stays visible as the secondary amount.
+const LOCAL_FIAT: Record<Locale, PrimaryCurrency> = { en: 'usd', id: 'idr', zh: 'cny' }
+
+// the fiat shown alongside an AUSD-primary display follows the chosen
 // language, so a Chinese speaker sees CNY rather than defaulting to USD
 export function secondaryCurrencyFor(primary: PrimaryCurrency, locale: Locale): PrimaryCurrency {
-  if (primary !== 'fxrp') return 'fxrp'
+  if (primary !== 'ausd') return 'ausd'
   if (locale === 'zh') return 'cny'
   if (locale === 'id') return 'idr'
   return 'usd'
@@ -39,8 +45,8 @@ export function secondaryCurrencyFor(primary: PrimaryCurrency, locale: Locale): 
 
 function initialCurrency(): PrimaryCurrency {
   const stored = localStorage.getItem(CURRENCY_KEY)
-  if (stored === 'usd' || stored === 'idr' || stored === 'fxrp' || stored === 'cny') return stored
-  return 'fxrp'
+  if (stored === 'usd' || stored === 'idr' || stored === 'ausd' || stored === 'cny') return stored
+  return LOCAL_FIAT[initialLocale()]
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
