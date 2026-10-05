@@ -4,13 +4,7 @@ import { CopyIcon, ExternalLinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -83,7 +77,7 @@ export function SettingsPage() {
             <Select
               value={primaryCurrency}
               onValueChange={(v) => {
-                if (v === 'usd' || v === 'idr' || v === 'fxrp' || v === 'cny') setPrimaryCurrency(v)
+                if (v === 'usd' || v === 'idr' || v === 'ausd' || v === 'cny') setPrimaryCurrency(v)
               }}
             >
               <SelectTrigger id="settings-currency" className="w-48">
@@ -92,7 +86,7 @@ export function SettingsPage() {
               <SelectContent>
                 <SelectItem value="usd">{t('settings.currencyUsd')}</SelectItem>
                 <SelectItem value="idr">{t('settings.currencyIdr')}</SelectItem>
-                <SelectItem value="fxrp">{t('settings.currencyFxrp')}</SelectItem>
+                <SelectItem value="ausd">{t('settings.currencyAusd')}</SelectItem>
                 <SelectItem value="cny">{t('settings.currencyCny')}</SelectItem>
               </SelectContent>
             </Select>
@@ -129,27 +123,33 @@ export function SettingsPage() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <span className="text-muted-foreground">{t('settings.contract')}</span>
-            <span className="flex items-center gap-1">
-              <span className="font-mono text-xs">{shortContract(CONTRACT_ID)}</span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('settings.copy')}
-                onClick={() => void copyContract()}
-              >
-                <CopyIcon />
-              </Button>
-            </span>
+            {CONTRACT_ID === '' ? (
+              <span className="text-muted-foreground">{t('settings.demoMode')}</span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <span className="font-mono text-xs">{shortContract(CONTRACT_ID)}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('settings.copy')}
+                  onClick={() => void copyContract()}
+                >
+                  <CopyIcon />
+                </Button>
+              </span>
+            )}
           </div>
-          <a
-            href={EXPLORER_CONTRACT_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 text-primary-ink underline-offset-4 hover:underline"
-          >
-            {t('settings.viewExplorer')}
-            <ExternalLinkIcon className="size-4" />
-          </a>
+          {CONTRACT_ID !== '' && (
+            <a
+              href={EXPLORER_CONTRACT_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-primary-ink underline-offset-4 hover:underline"
+            >
+              {t('settings.viewExplorer')}
+              <ExternalLinkIcon className="size-4" />
+            </a>
+          )}
         </CardContent>
       </Card>
       <Card className="rounded-2xl shadow-none">
