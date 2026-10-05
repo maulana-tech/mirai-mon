@@ -1,11 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_CHAIN_MODE?: 'evm'
-  readonly VITE_YOURSAVE_ADDRESS?: string
-  readonly VITE_FLARE_RPC_URL?: string
-  readonly VITE_FLARE_EXPLORER_URL?: string
-  readonly VITE_SPARKDEX_ROUTER?: string
-  readonly VITE_FIRELIGHT_VAULT?: string
-  readonly VITE_UPSHIFT_VAULT?: string
+  readonly VITE_MONAD_RPC_URL?: string
+  readonly VITE_MONAD_EXPLORER_URL?: string
+  readonly VITE_MIRAI_ADDRESS?: string
+  readonly VITE_AUSD_ADDRESS?: string
+  readonly VITE_INDEXER_URL?: string
 }
