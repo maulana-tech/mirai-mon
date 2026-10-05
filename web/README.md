@@ -1,51 +1,37 @@
 # Frontend
 
-React + Vite + TypeScript + Tailwind CSS v4 frontend for YourSave.
+React 19 + Vite + TypeScript + Tailwind CSS v4 app for Mirai on Monad.
 
 ## Stack
 
-- **React 19** with TypeScript
-- **Vite** for build & dev
-- **Tailwind CSS v4** for styling
-- **ethers.js v6** for contract interactions
-- **wagmi** for wallet connection
+- **ethers v6** for contract calls, with a read-only `JsonRpcProvider` for every read
+- **Mera** (`@category-labs/mera`) passkey accounts; `MeraSigner` adapts a Mera signing session to an ethers signer
+- **Vercel function** `api/onboard.ts` funds new accounts with MON for gas and test AUSD
 - **shadcn-style** UI components
 
 ## Commands
 
 ```bash
-npm install       # Install dependencies
-npm run dev       # Start dev server (http://localhost:5173)
-npm run build     # Type-check + production build
-npm run lint      # Run oxlint
+npm install
+npm run dev          # http://localhost:5173, including /api/onboard (DRIP_PRIVATE_KEY in .env)
+npm run build        # type-check + production build
+npm run lint         # oxlint
+node scripts/check-mera-signer.ts   # MeraSigner signs byte-identically to ethers.Wallet
+node scripts/check-fork.ts          # end-to-end on an anvil Monad fork (see header for setup)
 ```
 
 ## Environment
 
-```env
-VITE_CHAIN_MODE=evm
-VITE_YOURSAVE_ADDRESS=0x588DeC15D915659E8BF36c01e662479916301d3A
-VITE_FLARE_RPC_URL=https://coston2-api.flare.network/ext/C/rpc
-```
-
-Set `VITE_YOURSAVE_ADDRESS=""` for mock mode (no wallet needed).
+See `.env.example`. Leave `VITE_MIRAI_ADDRESS` empty for the in-memory mock. `DRIP_PRIVATE_KEY` is a server-only Vercel variable for `/api/onboard`.
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `lib/config.ts` | Contract addresses, RPC URLs |
-| `lib/yoursave.evm.ts` | EVM contract interactions |
-| `lib/yoursave.mock.ts` | In-memory mock |
-| `lib/fxrp.ts` | FXRP token utilities |
-| `lib/app-state.tsx` | Global state provider |
-| `lib/yield.ts` | Yield calculations |
-| `lib/errors.ts` | Error code mapping |
+| `lib/config.ts` | Chain, addresses, shared read provider |
+| `lib/wallet.tsx` | Passkey account store: create, sign in, lock after 30 min, re-unlock on demand |
+| `lib/mera-signer.ts` | ethers signer over a Mera session (gas buffer, local nonce tracking) |
+| `lib/mirai.evm.ts` | Contract calls; maps custom errors to `Error(Contract, #N)` |
+| `lib/ausd.ts` | AUSD balance and EIP-2612 permit signing |
+| `lib/activity.ts` | Envio GraphQL feed, with a recent-RPC-logs fallback |
 | `lib/i18n.tsx` | Translations (EN, ID, ZH) |
-
-## Gotchas
-
-- FXRP has **6 decimals** (not 18)
-- All write calls include explicit `gasLimit` to prevent silent reverts on Coston2
-- `vercel.json` handles SPA routing — excludes static assets from rewrite
-- Console logging is enabled in deposit flow for debugging
