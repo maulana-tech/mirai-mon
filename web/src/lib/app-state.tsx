@@ -10,23 +10,25 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { fetchActivity, type ActivityItem } from '@/lib/activity'
-import { yoursave } from '@/lib/yoursave'
+import { mirai } from '@/lib/mirai'
 import { explorerTxUrl } from '@/lib/config'
 import { errorKey } from '@/lib/errors'
 import { shortHex } from '@/lib/format'
 import { useT, type MessageKey } from '@/lib/i18n'
 import { FALLBACK_RATES, getFxRates, type FxRates } from '@/lib/rates'
-import type { YourSaveAccount } from '@/lib/types'
+import type { MiraiAccount } from '@/lib/types'
 import { useWallet } from '@/lib/wallet'
 
 type AccountStatus = 'disconnected' | 'loading' | 'ready' | 'error'
 
 type AppStateValue = {
-  account: YourSaveAccount | null
+  account: MiraiAccount | null
   accountStatus: AccountStatus
   rates: FxRates
   activity: ActivityItem[]
   activityLoading: boolean
+  /** Activity is the full history and has finished loading (required for principal/earnings). */
+  historyComplete: boolean
   busy: string | null
   refresh: () => Promise<void>
   runAction: <T extends { hash: string }>(
@@ -41,11 +43,12 @@ const AppStateContext = createContext<AppStateValue | null>(null)
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const { address } = useWallet()
   const t = useT()
-  const [account, setAccount] = useState<YourSaveAccount | null>(null)
+  const [account, setAccount] = useState<MiraiAccount | null>(null)
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('disconnected')
   const [rates, setRates] = useState<FxRates>(FALLBACK_RATES)
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const [historyFull, setHistoryFull] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const addressRef = useRef(address)
 
@@ -61,7 +64,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setActivityLoading(true)
     }
     const [accountResult, activityResult] = await Promise.allSettled([
-      yoursave.getAccount(addr),
+      mirai.getAccount(addr),
       fetchActivity(addr),
     ])
     if (addressRef.current !== addr) return
@@ -72,7 +75,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (initial) setAccount(null) // keep stale data on refresh failure so cards stay usable
       setAccountStatus('error')
     }
-    if (activityResult.status === 'fulfilled') setActivity(activityResult.value)
+    if (activityResult.status === 'fulfilled') {
+      setActivity(activityResult.value.items)
+      setHistoryFull(activityResult.value.complete)
+    } else {
+      setHistoryFull(false)
+    }
     setActivityLoading(false)
   }, [])
 
@@ -106,9 +114,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setBusy(key)
       try {
         const result = await fn()
-        // Wait 2s before reloading state to allow RPC nodes to sync
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        // The receipt is final on Monad, so refresh right away; a follow-up refresh covers an RPC
+        // node that is a block behind.
         await load(address, false)
+        setTimeout(() => void load(address, false), 1500)
         const hash = result.hash
         toast.success(t(successKey), {
           description: hash ? shortHex(hash) : undefined,
@@ -137,11 +146,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       rates,
       activity,
       activityLoading,
+      historyComplete: historyFull && !activityLoading,
       busy,
       refresh,
       runAction,
     }),
-    [account, accountStatus, rates, activity, activityLoading, busy, refresh, runAction],
+    [account, accountStatus, rates, activity, activityLoading, historyFull, busy, refresh, runAction],
   )
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
