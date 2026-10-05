@@ -1,44 +1,51 @@
-// Flare Coston2 Testnet configuration
-export const FLARE_CHAIN_ID = 114
-export const FLARE_CHAIN_HEX = `0x${FLARE_CHAIN_ID.toString(16)}`
-export const FLARE_RPC_URL =
-  import.meta.env.VITE_FLARE_RPC_URL ?? 'https://coston2-api.flare.network/ext/C/rpc'
-export const FLARE_EXPLORER_URL =
-  import.meta.env.VITE_FLARE_EXPLORER_URL ?? 'https://coston2-explorer.flare.network'
+import { JsonRpcProvider, Network, type JsonRpcPayload, type JsonRpcResult } from 'ethers'
 
-// Contract addresses on Flare Coston2
-export const YOURSAVE_ADDRESS: string =
-  import.meta.env.VITE_YOURSAVE_ADDRESS ?? '0x588DeC15D915659E8BF36c01e662479916301d3A'
-export const FXRP_ADDRESS: string =
-  import.meta.env.VITE_FXRP_ADDRESS ?? '0x0b6A3645c240605887a5532109323A3E12273dc7' // FAssets FXRP on Coston2
+// Monad Testnet configuration
+export const CHAIN_ID = 10143
+export const RPC_URL = import.meta.env.VITE_MONAD_RPC_URL ?? 'https://testnet-rpc.monad.xyz'
+export const EXPLORER_URL = import.meta.env.VITE_MONAD_EXPLORER_URL ?? 'https://testnet.monadscan.com'
 
-// Yield protocol addresses (Flare ecosystem)
-export const SPARKDEX_ROUTER: string =
-  import.meta.env.VITE_SPARKDEX_ROUTER ?? '0x4a1E5A90e9943467FAd1acea1E7F0e5e88472a1e'
-export const SPARKDEX_ADAPTER: string =
-  import.meta.env.VITE_SPARKDEX_ADAPTER ?? '0xD04A92C83AFe71f4f69F9FAD0A33229BFBdE33E6'
-export const VAULT_ADAPTER: string =
-  import.meta.env.VITE_VAULT_ADAPTER ?? '0x3c13BDd505DE69bB0DF0a2e68A0Cd93a44beB0b4'
-export const FIRELIGHT_VAULT: string =
-  import.meta.env.VITE_FIRELIGHT_VAULT ?? '0x780780D122f075ada1Fa86A18dE2e0763B2526Ec'
-export const UPSHIFT_VAULT: string =
-  import.meta.env.VITE_UPSHIFT_VAULT ?? '0x24c1a47cD5e8473b64EAB2a94515a196E10C7C81'
+// Mirai on Monad Testnet (deployments.json). Set VITE_MIRAI_ADDRESS="" to run the in-memory mock.
+export const MIRAI_ADDRESS: string =
+  import.meta.env.VITE_MIRAI_ADDRESS ?? '0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1'
+// Agora AUSD and its public faucet (https://docs.agora.finance/developer/contract-deployments)
+export const AUSD_ADDRESS: string =
+  import.meta.env.VITE_AUSD_ADDRESS ?? '0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC'
 
-// Output token used when routing savings through SparkDexAdapter (e.g. WFLR or USDT0)
-export const YIELD_TOKEN_OUT: string =
-  import.meta.env.VITE_YIELD_TOKEN_OUT ?? '0x8b322a30485C66C3fb3d052d921B6D218bE48fDD'
+// Optional Envio GraphQL endpoint for activity history; falls back to recent RPC logs.
+export const INDEXER_URL: string = import.meta.env.VITE_INDEXER_URL ?? ''
 
-export const EXPLORER_CONTRACT_URL = `${FLARE_EXPLORER_URL}/address/${YOURSAVE_ADDRESS}`
+export const CONTRACT_ID = MIRAI_ADDRESS
+export const EXPLORER_CONTRACT_URL = `${EXPLORER_URL}/address/${MIRAI_ADDRESS}`
 
-// Legacy aliases (used by activity, yoursave, app-shell, settings)
-export const IS_EVM = true
-export const CONTRACT_ID = YOURSAVE_ADDRESS
-export const EVM_RPC_URL = FLARE_RPC_URL
+/**
+ * Monad's public RPC allows ~50 requests/second, counting each call inside a batch, and answers the
+ * excess with per-item "request limit" errors that ethers would surface as failed calls. Retrying
+ * the batch with backoff keeps a busy page load (or a busy RPC) from showing as broken data.
+ */
+class RateLimitedProvider extends JsonRpcProvider {
+  async _send(payload: JsonRpcPayload | JsonRpcPayload[]): Promise<JsonRpcResult[]> {
+    for (let attempt = 0; ; attempt++) {
+      const results = await super._send(payload)
+      // error items arrive in the same array at runtime even though the type only names results
+      const limited = results.some((r) =>
+        /request limit|rate limit/i.test(String((r as { error?: { message?: string } }).error?.message ?? '')),
+      )
+      if (!limited || attempt >= 4) return results
+      await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt))
+    }
+  }
+}
+
+// One read-only provider for the whole app; reads never touch the user's keys.
+export const readProvider = new RateLimitedProvider(RPC_URL, Network.from(CHAIN_ID), { staticNetwork: true })
+// Monad blocks land every ~300ms; ethers' 4s default would make confirmed payments look slow.
+readProvider.pollingInterval = 500
 
 export function explorerTxUrl(hash: string): string {
-  return `${FLARE_EXPLORER_URL}/tx/${hash}`
+  return `${EXPLORER_URL}/tx/${hash}`
 }
 
 export function explorerAddressUrl(address: string): string {
-  return `${FLARE_EXPLORER_URL}/address/${address}`
+  return `${EXPLORER_URL}/address/${address}`
 }
