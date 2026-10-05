@@ -4,13 +4,16 @@ import { useTheme } from 'next-themes'
 import {
   ActivityIcon,
   ArrowUpRightIcon,
+  ChartCandlestickIcon,
   DropletsIcon,
   ExternalLinkIcon,
   LandmarkIcon,
   Link2Icon,
+  LockIcon,
   LogOutIcon,
   MoonIcon,
   PanelLeftIcon,
+  SendIcon,
   SettingsIcon,
   SlidersHorizontalIcon,
   SunIcon,
@@ -20,14 +23,15 @@ import {
 import { toast } from 'sonner'
 import { AddressAvatar } from '@/components/brand/address-avatar'
 import { LogoMark } from '@/components/brand/logo'
+import { Traces } from '@/components/landing/kit'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { EXPLORER_CONTRACT_URL } from '@/lib/config'
+import { CONTRACT_ID, EXPLORER_CONTRACT_URL } from '@/lib/config'
 import { useT, type MessageKey } from '@/lib/i18n'
 import { useScrollLock } from '@/lib/use-scroll-lock'
 import { cn } from '@/lib/utils'
 import { useWallet } from '@/lib/wallet'
-import { WalletPicker } from '@/components/wallet-picker'
+import { PasskeyDialog } from '@/components/passkey-dialog'
 
 const ITEM =
   'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]'
@@ -88,7 +92,7 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
       <div className={cn("flex items-center pt-1 pb-2", rail ? "justify-center" : "justify-between px-[9px]")}>
         <div className={cn("flex items-center gap-2", rail && "hidden")}>
           <LogoMark size={22} />
-          <span className={cn('text-lg font-semibold tracking-tight', label)}>YourSave</span>
+          <span className={cn('text-lg font-semibold tracking-tight', label)}>Mirai</span>
         </div>
         {onToggle && (
           <Button variant="ghost" size="icon-sm" onClick={onToggle} aria-label="Toggle Sidebar" className={cn(rail && "size-10")}>
@@ -110,7 +114,15 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
           <TrendingUpIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.yield')}</span>
         </NavLink>
+        <NavLink to="/app/market" onClick={onNavigate} className={navClass}>
+          <ChartCandlestickIcon className="size-[18px] shrink-0" />
+          <span className={label}>{t('nav.market')}</span>
+        </NavLink>
         <SectionLabel rail={rail}>{t('nav.action')}</SectionLabel>
+        <NavLink to="/app/send" onClick={onNavigate} className={navClass}>
+          <SendIcon className="size-[18px] shrink-0" />
+          <span className={label}>{t('nav.send')}</span>
+        </NavLink>
         <NavLink to="/app/withdraw" onClick={onNavigate} className={navClass}>
           <ArrowUpRightIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.withdraw')}</span>
@@ -134,15 +146,17 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
           <SettingsIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('settings.title')}</span>
         </NavLink>
-        <a
-          href={EXPLORER_CONTRACT_URL}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(ITEM, ITEM_IDLE, 'mb-2')}
-        >
-          <ExternalLinkIcon className="size-[18px] shrink-0" />
-          <span className={label}>{t('nav.viewContract')}</span>
-        </a>
+        {CONTRACT_ID && (
+          <a
+            href={EXPLORER_CONTRACT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(ITEM, ITEM_IDLE, 'mb-2')}
+          >
+            <ExternalLinkIcon className="size-[18px] shrink-0" />
+            <span className={label}>{t('nav.viewContract')}</span>
+          </a>
+        )}
         {address ? (
           <button
             type="button"
@@ -168,7 +182,7 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
                 {connecting ? `${t('topbar.connecting')}...` : t('topbar.connect')}
               </span>
             </button>
-            <WalletPicker open={pickerOpen} onOpenChange={setPickerOpen} />
+            <PasskeyDialog open={pickerOpen} onOpenChange={setPickerOpen} />
           </>
         )}
       </div>
@@ -185,6 +199,7 @@ function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
+      className="text-white hover:bg-white/10 hover:text-white dark:text-cobalt dark:hover:bg-cobalt/10 dark:hover:text-cobalt"
       aria-label={t('shell.theme')}
       onClick={() => setTheme(dark ? 'light' : 'dark')}
     >
@@ -211,6 +226,50 @@ function AddressChip({ address }: { address: string }) {
       <AddressAvatar address={address} size={24} className="rounded-full" />
       {shortAddress(address)}
     </button>
+  )
+}
+
+/** Signing-session state: prompt-free until it ends, then the next action asks for the passkey. */
+function SessionBadge() {
+  const t = useT()
+  const { status, sessionEndsAt, lock } = useWallet()
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (status !== 'unlocked') return
+    const id = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(id)
+  }, [status])
+
+  if (status === 'none') return null
+  if (status === 'locked' || sessionEndsAt === null) {
+    return (
+      <span
+        title={t('session.lockedHint')}
+        className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground"
+      >
+        <LockIcon className="size-3.5" />
+        {t('session.locked')}
+      </span>
+    )
+  }
+  const minutes = Math.max(1, Math.ceil((sessionEndsAt - now) / 60_000))
+  return (
+    <span className="flex items-center gap-1 rounded-full border bg-card py-1 pr-1 pl-3 text-xs">
+      <span className="size-2 rounded-full bg-cyan" aria-hidden="true" />
+      <span title={t('session.activeHint')} className="tabular-nums">
+        {t('session.active', { min: minutes })}
+      </span>
+      <button
+        type="button"
+        aria-label={t('session.lockNow')}
+        title={t('session.lockNow')}
+        onClick={lock}
+        className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <LockIcon className="size-3.5" />
+      </button>
+    </span>
   )
 }
 
@@ -247,16 +306,11 @@ export function AppShell() {
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
   return (
-    <div className="relative min-h-svh">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[-1]">
-        <img
-          src="/assets/section1-bg.png"
-          alt=""
-          className="h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-background/50" />
+    <div className="relative min-h-svh bg-cobalt dark:bg-white">
+      {/* same cobalt + traces backdrop as the payment page; cards sit on it in white */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+        <Traces className="top-[28vh] -left-[30%] h-[46vh] w-[160%] text-white dark:text-cobalt" />
       </div>
-      
       <aside
         ref={asideRef}
         id="app-sidebar"
@@ -303,10 +357,11 @@ export function AppShell() {
             </button>
           </div>
           <div className="mb-8 flex items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight">
+            <h1 className="text-3xl font-semibold tracking-tight text-white dark:text-cobalt">
               {t(greetingKey(new Date().getHours()))}
             </h1>
             <div className="flex items-center gap-2">
+              <SessionBadge />
               {address && <AddressChip address={address} />}
               <ThemeToggle />
             </div>
