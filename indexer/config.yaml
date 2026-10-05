@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: mirai-indexer
+field_selection:
+  transaction_fields:
+    - hash
+contracts:
+  - name: Mirai
+    handler: src/EventHandlers.ts
+    events:
+      - event: "PaymentRouted(address indexed from, address indexed to, uint256 amount, uint256 spendAmount, uint256 savingsAmount, uint256 shares)"
+      - event: "SpendWithdrawn(address indexed user, uint256 amount)"
+      - event: "SavingsWithdrawn(address indexed user, uint256 shares, uint256 amountOut)"
+      - event: "SplitSet(address indexed user, uint16 bps)"
+      - event: "LockSet(address indexed user, uint64 until)"
+      - event: "StrategySet(address indexed user, uint8 strategy, uint256 moved)"
+chains:
+  - id: 10143 # Monad testnet
+    start_block: 68343081 # deployments.json
+    contracts:
+      - name: Mirai
+        address: "0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1"

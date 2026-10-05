@@ -1,0 +1,13 @@
+{
+  "name": "mirai-indexer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start"
+  },
+  "devDependencies": {
+    "envio": "^3.12.1"
+  }
+}

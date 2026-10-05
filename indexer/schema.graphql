@@ -1,0 +1,36 @@
+# One row per Mirai event, keyed to the account it belongs to. The web app's Activity feed.
+type Activity {
+  id: ID!
+  user: String! @index
+  kind: String!
+  timestamp: BigInt! @index
+  txHash: String!
+  from: String
+  amount: BigInt
+  saved: BigInt
+  shares: BigInt
+  bps: Int
+  until: BigInt
+  strategy: Int
+}
+
+# Running per-account totals, so lifetime numbers need no log scan.
+type Saver {
+  id: ID!
+  totalReceived: BigInt!
+  totalSaved: BigInt!
+  totalWithdrawn: BigInt!
+  payments: Int!
+  splitBps: Int
+  lockUntil: BigInt
+  strategy: Int
+}
+
+# Protocol-wide totals (single row, id "mirai").
+type Protocol {
+  id: ID!
+  volume: BigInt!
+  saved: BigInt!
+  payments: Int!
+  savers: Int!
+}
