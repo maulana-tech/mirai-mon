@@ -3,10 +3,10 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppState } from '@/lib/app-state'
 import { useT } from '@/lib/i18n'
-import type { YourSaveAccount } from '@/lib/types'
+import type { MiraiAccount } from '@/lib/types'
 
 type AccountPanelProps = {
-  children: (account: YourSaveAccount) => ReactNode
+  children: (account: MiraiAccount) => ReactNode
 }
 
 export function AccountPanel({ children }: AccountPanelProps) {
