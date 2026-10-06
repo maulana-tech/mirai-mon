@@ -103,7 +103,7 @@ export function YieldPositionCard({
       <CardHeader>
         <CardTitle>{t('yield.positionTitle')}</CardTitle>
         <Badge variant="outline" className="mt-2 w-fit font-normal">
-          {isMarket(account.strategy) ? t('yield.marketBadge') : t('yield.vaultBadge')}
+          {account?.pockets.every((p) => isMarket(p.strategy)) ? t('yield.marketBadge') : t('yield.vaultBadge')}
         </Badge>
         {account !== null && account.savings > 0n && aprBps > 0 && (
           <p className="mt-2 text-sm text-primary-ink tabular-nums">
