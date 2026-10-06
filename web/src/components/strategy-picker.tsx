@@ -7,19 +7,19 @@ import { formatMoney, useT } from '@/lib/i18n'
 import { mirai } from '@/lib/mirai'
 import { useSettings } from '@/lib/settings'
 import { DEFAULT_APR_BPS, STRATEGIES, formatApr, isMarket } from '@/lib/strategies'
-import type { MiraiAccount, StrategyId, StrategyStats } from '@/lib/types'
+import type { Pocket, StrategyId, StrategyStats } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { usePendingLabel } from '@/lib/use-pending-label'
 import { useWallet } from '@/lib/wallet'
 
 type StrategyPickerProps = {
-  account: MiraiAccount
+  pocket: Pocket
   strategies: StrategyStats[] | null
   onChanged: () => void
 }
 
-/** Choose where savings earn. Switching moves existing savings into the new strategy in one transaction. */
-export function StrategyPicker({ account, strategies, onChanged }: StrategyPickerProps) {
+/** Choose where a pocket's savings earn. Switching moves its money into the new strategy in one transaction. */
+export function StrategyPicker({ pocket, strategies, onChanged }: StrategyPickerProps) {
   const t = useT()
   const { address } = useWallet()
   const pendingLabel = usePendingLabel()
@@ -27,8 +27,10 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
   const { locale, primaryCurrency } = useSettings()
 
   const choose = async (id: StrategyId) => {
-    if (!address || id === account.strategy) return
-    const ok = await runAction(`strategy-${id}`, 'strategy.switched', () => mirai.setStrategy(address, id))
+    if (!address || id === pocket.strategy) return
+    const ok = await runAction(`strategy-${id}`, 'strategy.switched', () =>
+      mirai.setPocketStrategy(address, pocket.id, id),
+    )
     if (ok) onChanged()
   }
 
@@ -43,7 +45,7 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
           {STRATEGIES.map((s) => {
             const stats = strategies?.find((x) => x.id === s.id)
             const apr = stats?.aprBps ?? DEFAULT_APR_BPS[s.id]
-            const selected = account.strategy === s.id
+            const selected = pocket.strategy === s.id
             const pending = busy === `strategy-${s.id}`
             return (
               <button
@@ -71,8 +73,9 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
                       <span className="flex -space-x-2">
                         <CoinIcon symbol="BTC" size={28} className="ring-2 ring-card" />
                         <CoinIcon symbol="ETH" size={28} className="ring-2 ring-card" />
+                        <CoinIcon symbol="MON" size={28} className="ring-2 ring-card" />
                       </span>
-                      BTC · ETH
+                      {t('strategy.investHeadline')}
                     </span>
                     <span className="text-xs text-muted-foreground">{t('strategy.marketLabel')}</span>
                   </>
@@ -109,7 +112,7 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          {account.savings > 0n ? t('strategy.switchMoves') : t('strategy.switchFuture')} {t('strategy.testnetNote')}{' '}
+          {pocket.value > 0n ? t('strategy.switchMoves') : t('strategy.switchFuture')} {t('strategy.testnetNote')}{' '}
           {t('strategy.marketNote')}
         </p>
       </CardContent>
