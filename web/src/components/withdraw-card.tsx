@@ -10,6 +10,7 @@ import { useAppState } from '@/lib/app-state'
 import { mirai } from '@/lib/mirai'
 import { ausdToInput, parseAusd } from '@/lib/format'
 import { formatDate, formatMoney, useT, type MessageKey } from '@/lib/i18n'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { secondaryCurrencyFor, useSettings } from '@/lib/settings'
 import type { MiraiAccount } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,7 @@ function tryParse(raw: string): bigint | null {
 
 export function WithdrawCard({ account }: { account: MiraiAccount }) {
   const t = useT()
+  const pendingLabel = usePendingLabel()
   const { address } = useWallet()
   const { busy, rates, runAction } = useAppState()
   const { locale, primaryCurrency } = useSettings()
@@ -69,7 +71,7 @@ export function WithdrawCard({ account }: { account: MiraiAccount }) {
 
   const buttonLabel =
     busy === pocket
-      ? `${t('common.loading')}...`
+      ? pendingLabel
       : amount === null
         ? t('withdraw.enterAmount')
         : t('withdraw.buttonAmount', { amount: formatMoney(amount, 'ausd', rates, locale) })
