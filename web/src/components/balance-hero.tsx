@@ -15,9 +15,9 @@ import { isMarket } from '@/lib/strategies'
 import type { MiraiAccount } from '@/lib/types'
 import { useAppState } from '@/lib/app-state'
 import { cn } from '@/lib/utils'
-import { computeSavingsPosition } from '@/lib/yield'
-
-const MIN_SEGMENT_PCT = 4 // keep tiny pockets visible on the bar
+import { StatusBar } from '@/components/ui/status-bar'
+import type { StatusBarData } from '@/components/ui/status-bar-utils/status.types'
+import { computeSavingsPosition, dailyIncome } from '@/lib/yield'
 
 type BalanceHeroProps = {
   account: MiraiAccount | null
@@ -26,18 +26,9 @@ type BalanceHeroProps = {
   rates: FxRates
 }
 
-function segmentWidths(spend: number, save: number): [number, number] {
-  const total = spend + save
-  if (total <= 0) return [0, 0]
-  let spendPct = (spend / total) * 100
-  if (spend > 0 && spendPct < MIN_SEGMENT_PCT) spendPct = MIN_SEGMENT_PCT
-  if (save > 0 && spendPct > 100 - MIN_SEGMENT_PCT) spendPct = 100 - MIN_SEGMENT_PCT
-  return [spendPct, 100 - spendPct]
-}
-
 export function BalanceHero({ account, activity, loading, rates }: BalanceHeroProps) {
   const t = useT()
-  const { historyComplete } = useAppState()
+  const { historyComplete, wallet } = useAppState()
   const { locale, primaryCurrency } = useSettings()
   const secondaryCurrency = secondaryCurrencyFor(primaryCurrency, locale)
   const intl = intlLocale(locale)
@@ -62,10 +53,29 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
     )
   }
 
-  const total = account.spend + account.savings
-  const empty = total <= 0n
+  const inAccount = wallet ?? 0n
+  const total = account.spend + account.savings + inAccount
+  // Nothing has come in through Mirai yet (onboarding funds sit in the account, not the pockets).
+  const empty = account.spend + account.savings <= 0n
   const locked = Number(account.lockUntil) * 1000 > Date.now()
-  const [spendPct, savePct] = segmentWidths(ausdToNumber(account.spend), ausdToNumber(account.savings))
+  // One bar per day: the share of that day's income that was saved (top) vs left to spend.
+  const timeline: StatusBarData[] = dailyIncome(activity).map(({ day, received, saved }) => {
+    if (received === 0n) return { day, bar: [{ status: 'empty', height: 100 }], card: [], events: [] }
+    const savedPct = Number((saved * 10_000n) / received) / 100
+    return {
+      day,
+      bar: [
+        { status: 'success', height: savedPct },
+        { status: 'info', height: 100 - savedPct },
+      ],
+      card: [
+        { status: 'empty', label: t('balances.received'), value: primary(received) },
+        { status: 'success', label: t('balances.savings'), value: primary(saved) },
+        { status: 'info', label: t('balances.spendable'), value: primary(received - saved) },
+      ],
+      events: [],
+    }
+  })
   const position = computeSavingsPosition(activity, account.savings, historyComplete)
   const earning = position.earnings !== null && position.earnings > 0n
 
@@ -124,6 +134,19 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
             {t('balances.rateCaption', { amount: formatMoney(AUSD_SCALE, primaryCurrency, rates, locale) })}
           </p>
         )}
+        {inAccount > 0n && (
+          <Link
+            to="/app/send"
+            className="mt-3 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm hover:border-primary/40"
+          >
+            <span className="text-muted-foreground">{t('balances.wallet')}</span>
+            <span className="flex items-center gap-2">
+              <span className="font-semibold tabular-nums">{primary(inAccount)}</span>
+              <span className="hidden text-xs text-muted-foreground sm:inline">{t('balances.walletHint')}</span>
+              <ArrowRightIcon className="size-4 text-muted-foreground" />
+            </span>
+          </Link>
+        )}
         <div className="mt-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -149,9 +172,21 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
               <p className="text-xs text-muted-foreground tabular-nums">~ {secondary(account.savings)}</p>
             </div>
           </div>
-          <div className="mt-3 flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
-            {spendPct > 0 && <div className="rounded-full bg-primary" style={{ width: `${spendPct}%` }} />}
-            {savePct > 0 && <div className="rounded-full bg-gold" style={{ width: `${savePct}%` }} />}
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+              <span className="font-medium tracking-wider uppercase">{t('balances.last30')}</span>
+              <span className="flex items-center gap-3">
+                <span className="flex items-center gap-1">
+                  <span className="size-2 rounded-full bg-gold" />
+                  {t('balances.savings')}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="size-2 rounded-full bg-primary" />
+                  {t('balances.spendable')}
+                </span>
+              </span>
+            </div>
+            <StatusBar data={timeline} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">{t('balances.pocketsHint')}</p>
           {empty ? (
