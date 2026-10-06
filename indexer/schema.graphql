@@ -1,4 +1,5 @@
 # One row per Mirai event, keyed to the account it belongs to. The web app's Activity feed.
+# A payment between two accounts writes two rows: "pay" for the recipient, "sent" for the payer.
 type Activity {
   id: ID!
   user: String! @index
@@ -6,6 +7,7 @@ type Activity {
   timestamp: BigInt! @index
   txHash: String!
   from: String
+  to: String
   amount: BigInt
   saved: BigInt
   shares: BigInt
