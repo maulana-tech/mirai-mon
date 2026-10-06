@@ -2,7 +2,7 @@ import type { ComponentType } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRightIcon,
-  ArrowUpRightIcon,
+  ChartCandlestickIcon,
   Link2Icon,
   SlidersHorizontalIcon,
   TrendingUpIcon,
@@ -30,13 +30,6 @@ type SecondaryAction = {
 
 const SECONDARY_ACTIONS: SecondaryAction[] = [
   {
-    to: '/app/withdraw',
-    icon: ArrowUpRightIcon,
-    title: 'nav.withdraw',
-    caption: 'page.withdrawCaption',
-    tint: 'bg-primary/10 text-primary-ink',
-  },
-  {
     to: '/app/rules',
     icon: SlidersHorizontalIcon,
     title: 'nav.rules',
@@ -50,18 +43,25 @@ const SECONDARY_ACTIONS: SecondaryAction[] = [
     caption: 'page.yieldCaption',
     tint: 'bg-gold/15 text-gold-ink',
   },
+  {
+    to: '/app/market',
+    icon: ChartCandlestickIcon,
+    title: 'nav.market',
+    caption: 'page.investCaption',
+    tint: 'bg-primary/10 text-primary-ink',
+  },
 ]
 
 export function Dashboard() {
   const { address } = useWallet()
-  const { account, accountStatus, rates, activity, refresh } = useAppState()
+  const { account, wallet, accountStatus, rates, activity, refresh } = useAppState()
   const navigate = useNavigate()
   const t = useT()
 
   if (!address) return <ConnectPrompt />
 
   const loading = accountStatus === 'loading'
-  const funded = faucetedFlag(address) || activity.length > 0
+  const funded = faucetedFlag(address) || activity.length > 0 || (wallet ?? 0n) > 0n
   const received = activity.some((item) => item.kind === 'pay')
 
   return (
