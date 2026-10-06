@@ -1,4 +1,5 @@
 import { TriangleAlertIcon } from 'lucide-react'
+import { CoinIcon } from '@/components/brand/coin-icon'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,8 +55,9 @@ export function SmartMoneyCard({ active }: { active: boolean }) {
                 {basket.coins.map((c, i) => (
                   <div key={c.symbol} className="flex items-center justify-between rounded-xl border p-3 text-sm">
                     <span className="flex items-center gap-2 font-medium">
-                      <span className={cn('size-2 rounded-full', BAR[i % BAR.length])} />
+                      <CoinIcon symbol={c.symbol} size={22} />
                       {c.symbol} · {c.weightBps / 100}%
+                      <span className={cn('size-2 rounded-full', BAR[i % BAR.length])} aria-hidden="true" />
                     </span>
                     <span className="text-muted-foreground tabular-nums">{usd(c.priceUsd)}</span>
                   </div>
@@ -76,7 +78,10 @@ export function SmartMoneyCard({ active }: { active: boolean }) {
             <ul className="divide-y rounded-xl border text-sm">
               {info.holdings.map((h) => (
                 <li key={h.symbol} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="min-w-0 truncate font-medium">{h.symbol}</span>
+                  <span className="flex min-w-0 items-center gap-2 font-medium">
+                    <CoinIcon symbol={h.symbol} size={20} />
+                    <span className="truncate">{h.symbol}</span>
+                  </span>
                   <span className="flex shrink-0 items-center gap-3 tabular-nums">
                     <span className="text-muted-foreground">
                       {h.holders === 1 ? t('market.holderOne') : t('market.holders', { n: h.holders })}
