@@ -12,25 +12,18 @@ export type SavingsHistoryPoint = {
   principal: bigint
 }
 
-// Replays deposits and withdrawals (oldest first) to track the cost basis of the shares still held.
+// Replays deposits and withdrawals (oldest first) as net deposits: what went into savings minus what
+// came out, never below zero. Moves between pockets and strategies stay inside savings, so they
+// don't count; withdrawals come out of principal first, so all past growth stays in "earned".
 function replaySavingsBasis(activity: ActivityItem[]): SavingsHistoryPoint[] {
-  const oldestFirst = [...activity].reverse()
-  let runningShares = 0n
   let basis = 0n
   const points: SavingsHistoryPoint[] = []
-  for (const item of oldestFirst) {
-    if (item.kind === 'pay' && item.saved !== undefined && item.shares !== undefined && item.shares > 0n) {
-      runningShares += item.shares
+  for (const item of [...activity].reverse()) {
+    if (item.kind === 'pay' && item.saved !== undefined && item.saved > 0n) {
       basis += item.saved
       points.push({ at: item.at, principal: basis })
-    } else if (item.kind === 'wd_save' && item.shares !== undefined) {
-      // Shares burned can exceed the replayed count once savings moved between strategy vaults (each
-      // vault prices shares differently), so cap at what is held: withdrawing everything zeroes the
-      // basis instead of driving it negative. ponytail: share counts across vaults are approximate;
-      // track StrategySet's moved amount as the new basis if partial post-migration withdrawals drift.
-      const burned = item.shares < runningShares ? item.shares : runningShares
-      basis -= runningShares > 0n ? (basis * burned) / runningShares : basis
-      runningShares -= burned
+    } else if (item.kind === 'wd_save' && item.amount !== undefined) {
+      basis -= item.amount < basis ? item.amount : basis
       points.push({ at: item.at, principal: basis })
     }
   }
