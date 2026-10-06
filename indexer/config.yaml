@@ -9,13 +9,22 @@ contracts:
     events:
       - event: "PaymentRouted(address indexed from, address indexed to, uint256 amount, uint256 spendAmount, uint256 savingsAmount, uint256 shares)"
       - event: "SpendWithdrawn(address indexed user, uint256 amount)"
-      - event: "SavingsWithdrawn(address indexed user, uint256 shares, uint256 amountOut)"
       - event: "SplitSet(address indexed user, uint16 bps)"
-      - event: "LockSet(address indexed user, uint64 until)"
-      - event: "StrategySet(address indexed user, uint8 strategy, uint256 moved)"
+      - event: "PocketCreated(address indexed user, uint256 indexed pocket, uint8 strategy)"
+      - event: "PocketFunded(address indexed user, uint256 indexed pocket, uint256 amount)"
+      - event: "PocketStrategySet(address indexed user, uint256 indexed pocket, uint8 strategy, uint256 moved)"
+      - event: "PocketLockSet(address indexed user, uint256 indexed pocket, uint64 until)"
+      - event: "PocketWithdrawn(address indexed user, uint256 indexed pocket, uint256 amount)"
+      - event: "PocketClosed(address indexed user, uint256 indexed pocket, uint256 indexed into, uint256 moved)"
+  - name: BasketVault
+    handler: src/EventHandlers.ts
+    events:
+      - event: "WeightsSet(address indexed user, uint256 indexed pocket, bool custom, uint16[] weights)"
 chains:
   - id: 10143 # Monad testnet
-    start_block: 68343081 # deployments.json
+    start_block: 68647993 # deployments.json
     contracts:
       - name: Mirai
-        address: "0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1"
+        address: "0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83"
+      - name: BasketVault
+        address: "0x4D7470dd92E1b58e48ccD4902B596A810F9189f6"
