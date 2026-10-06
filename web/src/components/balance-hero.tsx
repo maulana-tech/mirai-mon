@@ -1,17 +1,15 @@
 import { Link } from 'react-router-dom'
-import { ArrowRightIcon, LockIcon } from 'lucide-react'
+import { ArrowRightIcon } from 'lucide-react'
 import { TokenIcon } from '@/components/brand/token-icon'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { NumberTicker } from '@/components/ui/number-ticker'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ActivityItem } from '@/lib/activity'
 import { AUSD_SCALE } from '@/lib/ausd'
 import { ausdToNumber } from '@/lib/format'
-import { currencyAffix, formatDate, formatMoney, intlLocale, useT } from '@/lib/i18n'
+import { currencyAffix, formatMoney, intlLocale, useT } from '@/lib/i18n'
 import type { FxRates } from '@/lib/rates'
 import { secondaryCurrencyFor, useSettings } from '@/lib/settings'
-import { isMarket } from '@/lib/strategies'
 import type { MiraiAccount } from '@/lib/types'
 import { useAppState } from '@/lib/app-state'
 import { cn } from '@/lib/utils'
@@ -57,7 +55,6 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
   const total = account.spend + account.savings + inAccount
   // Nothing has come in through Mirai yet (onboarding funds sit in the account, not the pockets).
   const empty = account.spend + account.savings <= 0n
-  const locked = Number(account.lockUntil) * 1000 > Date.now()
   // One bar per day: the share of that day's income that was saved (top) vs left to spend.
   const timeline: StatusBarData[] = dailyIncome(activity).map(({ day, received, saved }) => {
     if (received === 0n) return { day, bar: [{ status: 'empty', height: 100 }], card: [], events: [] }
@@ -199,12 +196,9 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
             </p>
           ) : (
             <div className="mt-1 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              {locked && (
-                <Badge variant="secondary" className="gap-1 bg-accent text-xs text-accent-foreground">
-                  <LockIcon className="size-3" />
-                  {t('balances.lockedUntil', { date: formatDate(account.lockUntil, locale) })}
-                </Badge>
-              )}
+              <Link to="/app/pockets" className="text-xs text-muted-foreground hover:underline">
+                {t('rules.pocketsLink', { n: account.pockets.length })}
+              </Link>
               {account.savings > 0n && (
                 <Link
                   to="/app/yield"
@@ -216,9 +210,7 @@ export function BalanceHero({ account, activity, loading, rates }: BalanceHeroPr
                   <span className="size-1.5 rounded-full bg-gold" />
                   {earning && position.earnings !== null
                     ? t('balances.earningsLine', { amount: primary(position.earnings) })
-                    : isMarket(account.strategy)
-                      ? t('yield.marketBadge')
-                      : t('balances.earningCaption')}
+                    : t('balances.earningCaption')}
                 </Link>
               )}
             </div>
