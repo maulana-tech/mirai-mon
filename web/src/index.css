@@ -34,6 +34,9 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-chart-label: var(--chart-label);
+  --color-chart-tooltip-foreground: var(--popover-foreground);
+  --color-chart-tooltip-muted: var(--muted-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -253,3 +256,16 @@
 @utility animate-glitch-2 {
   animation: glitch-anim-2 3s infinite linear alternate-reverse;
 }
+
+/* Charts (components/ui/bar-chart.tsx): derived from the theme tokens, so they follow light/dark. */
+:root {
+  --chart-background: var(--card);
+  --chart-foreground: var(--card-foreground);
+  --chart-foreground-muted: var(--muted-foreground);
+  --chart-label: var(--muted-foreground);
+  --chart-line-primary: var(--primary);
+  --chart-line-secondary: var(--color-gold);
+  --chart-crosshair: color-mix(in oklab, var(--primary) 45%, transparent);
+  --chart-grid: var(--border);
+}
+
