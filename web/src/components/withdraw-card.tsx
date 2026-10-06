@@ -12,13 +12,15 @@ import { ausdToInput, parseAusd } from '@/lib/format'
 import { formatDate, formatMoney, useT, type MessageKey } from '@/lib/i18n'
 import { usePendingLabel } from '@/lib/use-pending-label'
 import { secondaryCurrencyFor, useSettings } from '@/lib/settings'
+import { usePocketMetas } from '@/lib/pocket-meta'
+import { isLocked, pocketLabel } from '@/lib/pockets'
 import type { MiraiAccount } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useWallet } from '@/lib/wallet'
 
-type Pocket = 'spend' | 'savings'
+type Tab = 'spend' | 'savings'
 
-const PANEL: Record<Pocket, { art: LineArtKind; label: MessageKey; title: MessageKey; body: MessageKey }> = {
+const PANEL: Record<Tab, { art: LineArtKind; label: MessageKey; title: MessageKey; body: MessageKey }> = {
   spend: { art: 'withdraw', label: 'withdraw.panelSpendLabel', title: 'withdraw.panelSpendTitle', body: 'withdraw.panelSpendBody' },
   savings: { art: 'vault', label: 'withdraw.panelSaveLabel', title: 'withdraw.panelSaveTitle', body: 'withdraw.panelSaveBody' },
 }
@@ -33,18 +35,21 @@ function tryParse(raw: string): bigint | null {
   }
 }
 
-export function WithdrawCard({ account }: { account: MiraiAccount }) {
+export function WithdrawCard({ account, initialPocket }: { account: MiraiAccount; initialPocket?: number }) {
   const t = useT()
   const pendingLabel = usePendingLabel()
   const { address } = useWallet()
   const { busy, rates, runAction } = useAppState()
   const { locale, primaryCurrency } = useSettings()
-  const [pocket, setPocket] = useState<Pocket>('spend')
+  const [pocket, setPocket] = useState<Tab>(initialPocket === undefined ? 'spend' : 'savings')
+  const [pocketId, setPocketId] = useState(initialPocket ?? account.pockets[0]?.id ?? 0)
   const [value, setValue] = useState('')
+  const { metas } = usePocketMetas(account.pockets)
   const anyBusy = busy !== null
 
-  const locked = Number(account.lockUntil) * 1000 > Date.now()
-  const available = pocket === 'spend' ? account.spend : account.savings
+  const from = account.pockets.find((p) => p.id === pocketId) ?? account.pockets[0]
+  const locked = from ? isLocked(from) : false
+  const available = pocket === 'spend' ? account.spend : (from?.value ?? 0n)
   const blocked = pocket === 'savings' && locked
   const amount = tryParse(value)
   const tooMuch = amount !== null && amount > available
@@ -52,7 +57,7 @@ export function WithdrawCard({ account }: { account: MiraiAccount }) {
   const panel = PANEL[pocket]
 
   const switchPocket = (next: string) => {
-    setPocket(next as Pocket)
+    setPocket(next as Tab)
     setValue('')
   }
 
@@ -62,10 +67,11 @@ export function WithdrawCard({ account }: { account: MiraiAccount }) {
       toast.error(t('errors.invalidAmount'))
       return
     }
+    if (pocket === 'savings' && !from) return
     const ok =
       pocket === 'spend'
         ? await runAction('spend', 'success.withdrewSpend', () => mirai.withdrawSpend(address, amount))
-        : await runAction('savings', 'success.withdrewSavings', () => mirai.withdrawSavings(address, amount))
+        : await runAction('savings', 'success.withdrewSavings', () => mirai.withdrawPocket(address, from.id, amount))
     if (ok) setValue('')
   }
 
@@ -95,7 +101,31 @@ export function WithdrawCard({ account }: { account: MiraiAccount }) {
           <div className="flex items-center gap-3">
             <TokenIcon token="ausd" size={36} />
             <div>
-              <p className="font-semibold">{t(pocket === 'spend' ? 'withdraw.fromSpend' : 'withdraw.fromSave')}</p>
+              {pocket === 'savings' && account.pockets.length > 1 ? (
+                <select
+                  aria-label={t('withdraw.fromSave')}
+                  value={from?.id}
+                  disabled={anyBusy}
+                  onChange={(e) => {
+                    setPocketId(Number(e.target.value))
+                    setValue('')
+                  }}
+                  className="rounded-lg border bg-card px-2 py-1 font-semibold"
+                >
+                  {account.pockets.map((p) => {
+                    const l = pocketLabel(p, metas[p.id], t)
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {l.name}
+                      </option>
+                    )
+                  })}
+                </select>
+              ) : (
+                <p className="font-semibold">
+                  {pocket === 'spend' ? t('withdraw.fromSpend') : from ? pocketLabel(from, metas[from.id], t).name : ''}
+                </p>
+              )}
               <p className="font-mono text-xs text-muted-foreground">AUSD</p>
             </div>
           </div>
@@ -174,7 +204,7 @@ export function WithdrawCard({ account }: { account: MiraiAccount }) {
             {locked && (
               <p className="flex items-center gap-2 text-xs font-medium text-accent-foreground">
                 <LockIcon className="size-4 shrink-0" />
-                {t('withdraw.lockedReason', { date: formatDate(account.lockUntil, locale) })}
+                {t('withdraw.lockedReason', { date: formatDate(from!.lockUntil, locale) })}
               </p>
             )}
             <p className="text-xs text-muted-foreground">{t('withdraw.savingsHint')}</p>
