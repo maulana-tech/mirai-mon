@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { LockIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { FeatureSplit } from '@/components/feature-split'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { useAppState } from '@/lib/app-state'
 import { AUSD_SCALE } from '@/lib/ausd'
 import { mirai } from '@/lib/mirai'
-import { formatDate, formatMoney, useT } from '@/lib/i18n'
+import { formatMoney, useT } from '@/lib/i18n'
 import { usePendingLabel } from '@/lib/use-pending-label'
 import { useSettings } from '@/lib/settings'
 import type { MiraiAccount } from '@/lib/types'
@@ -27,7 +26,6 @@ export function RulesCard({ account }: RulesCardProps) {
   const { busy, rates, runAction } = useAppState()
   const { locale } = useSettings()
   const [draft, setDraft] = useState<number | null>(null)
-  const [date, setDate] = useState('')
   const anyBusy = busy !== null
 
   const percent = draft ?? Math.round(account.splitBps / 100)
@@ -35,26 +33,10 @@ export function RulesCard({ account }: RulesCardProps) {
   const saved = (EXAMPLE * BigInt(percent)) / 100n
   const money = (amount: bigint) => formatMoney(amount, 'ausd', rates, locale)
 
-  // local calendar date; toISOString would allow locking a date already past in UTC+ zones
-  const next = new Date(Date.now() + 86_400_000)
-  const tomorrow = [
-    next.getFullYear(),
-    String(next.getMonth() + 1).padStart(2, '0'),
-    String(next.getDate()).padStart(2, '0'),
-  ].join('-')
-  const locked = Number(account.lockUntil) * 1000 > Date.now()
-
   const handleSaveSplit = async () => {
     if (!address) return
     const ok = await runAction('split', 'success.splitSaved', () => mirai.setSplit(address, percent * 100))
     if (ok) setDraft(null)
-  }
-
-  const handleLock = async () => {
-    if (!address) return
-    const until = BigInt(Math.floor(new Date(`${date}T00:00:00`).getTime() / 1000))
-    const ok = await runAction('lock', 'success.lockSet', () => mirai.setLock(address, until))
-    if (ok) setDate('')
   }
 
   return (
@@ -108,34 +90,9 @@ export function RulesCard({ account }: RulesCardProps) {
         {busy === 'split' ? pendingLabel : t('rules.saveButton')}
       </Button>
 
-      <div className="mt-5 rounded-2xl border p-4">
-        <p className="flex items-center gap-2 text-sm font-medium">
-          <LockIcon className="size-4 text-muted-foreground" />
-          {t('rules.lockTitle')}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {locked ? t('rules.lockedStatus', { date: formatDate(account.lockUntil, locale) }) : t('rules.noLock')}
-        </p>
-        <div className="mt-3 flex gap-2">
-          <Input
-            type="date"
-            aria-label={t('rules.lockLabel')}
-            min={tomorrow}
-            value={date}
-            disabled={anyBusy}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <Button
-            variant="outline"
-            className="rounded-full"
-            onClick={() => void handleLock()}
-            disabled={anyBusy || date === '' || date < tomorrow}
-          >
-            {busy === 'lock' ? pendingLabel : t('rules.lockButton')}
-          </Button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">{t('rules.lockCaption')}</p>
-      </div>
+      <Link to="/app/pockets" className="mt-4 block text-center text-sm text-primary-ink hover:underline">
+        {t('rules.pocketsLink', { n: account.pockets.length })}
+      </Link>
     </FeatureSplit>
   )
 }
