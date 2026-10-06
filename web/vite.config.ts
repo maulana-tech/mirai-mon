@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), devApi(loadEnv(mode, process.cwd(), ''))],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 }))
