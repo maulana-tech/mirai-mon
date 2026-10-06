@@ -1,8 +1,8 @@
 {
   "monad_testnet": {
     "chainId": 10143,
-    "mirai": "0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1",
-    "deployBlock": 68343081,
+    "mirai": "0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83",
+    "deployBlock": 68647993,
     "ausd": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC",
     "ausdFaucet": "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C",
     "strategies": [
@@ -25,14 +25,27 @@
         "streamer": "0x6F1C6f95F49196B5b8Cb769b16B9DE8C51f93a4e"
       },
       {
-        "name": "smartMoney",
-        "vault": "0x1024D899fe9Bf3B1588358eC36825aF74a844ec3",
-        "basket": {
+        "name": "invest",
+        "vault": "0x4D7470dd92E1b58e48ccD4902B596A810F9189f6",
+        "type": "BasketVault",
+        "assets": [
+          "USDC",
+          "BTC",
+          "ETH",
+          "LINK",
+          "MON",
+          "CHOG",
+          "NADS",
+          "MONCAT",
+          "EMO"
+        ],
+        "chainlink": {
+          "USDC/USD": "0x39820e7965e29DC86b94F20eD04e9c5cCf9aFf95",
           "BTC/USD": "0x12C0F44368a02081ce58a936d1C1F606BB301715",
-          "ETH/USD": "0x5c8c8482f064049248F86D9F4aFa4B1f2F5b6d31"
+          "ETH/USD": "0x5c8c8482f064049248F86D9F4aFa4B1f2F5b6d31",
+          "LINK/USD": "0x2A9FBFbf392594c4Dd7593C8a91cdEbc02e5b884"
         },
-        "curator": "0x59cC2ACdf03BD622428de6520A647afaF7382d98",
-        "oracle": "chainlink"
+        "curator": "0x59cC2ACdf03BD622428de6520A647afaF7382d98"
       }
     ]
   }
