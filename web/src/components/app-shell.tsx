@@ -20,6 +20,7 @@ import {
   SunIcon,
   TrendingUpIcon,
   WalletIcon,
+  PiggyBankIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddressAvatar } from '@/components/brand/address-avatar'
@@ -119,6 +120,10 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
         <NavLink to="/app/rules" onClick={onNavigate} className={navClass}>
           <SlidersHorizontalIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.rules')}</span>
+        </NavLink>
+        <NavLink to="/app/pockets" onClick={onNavigate} className={navClass}>
+          <PiggyBankIcon className="size-[18px] shrink-0" />
+          <span className={label}>{t('nav.pockets')}</span>
         </NavLink>
         <NavLink to="/app/yield" onClick={onNavigate} className={navClass}>
           <TrendingUpIcon className="size-[18px] shrink-0" />
