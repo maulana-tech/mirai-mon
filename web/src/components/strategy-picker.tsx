@@ -1,4 +1,5 @@
 import { CircleCheckIcon, Loader2Icon } from 'lucide-react'
+import { CoinIcon } from '@/components/brand/coin-icon'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAppState } from '@/lib/app-state'
@@ -62,7 +63,13 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
                 </div>
                 {isMarket(s.id) ? (
                   <>
-                    <span className="mt-3 text-3xl font-semibold tracking-tight">BTC · ETH</span>
+                    <span className="mt-3 flex items-center gap-2 text-3xl font-semibold tracking-tight">
+                      <span className="flex -space-x-2">
+                        <CoinIcon symbol="BTC" size={28} className="ring-2 ring-card" />
+                        <CoinIcon symbol="ETH" size={28} className="ring-2 ring-card" />
+                      </span>
+                      BTC · ETH
+                    </span>
                     <span className="text-xs text-muted-foreground">{t('strategy.marketLabel')}</span>
                   </>
                 ) : (
