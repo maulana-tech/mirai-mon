@@ -13,6 +13,11 @@ const CONTRACT_ERROR_KEYS: Record<number, MessageKey> = {
   11: 'errors.unauthorized',
   12: 'errors.goalTooLarge',
   13: 'errors.generic',
+  14: 'errors.invalidWeights',
+  15: 'errors.priceMissing',
+  16: 'errors.generic',
+  17: 'errors.tooManyPockets',
+  18: 'errors.invalidShares',
 }
 
 function errorMessage(e: unknown): string {
@@ -28,7 +33,7 @@ export function errorKey(e: unknown): MessageKey {
   if (isMeraError(e)) {
     if (e.code === 'PRF_UNAVAILABLE' || e.code === 'CRYPTO_UNAVAILABLE') return 'errors.passkeyUnsupported'
     if (e.code === 'PASSKEY_OPERATION_FAILED') return 'errors.walletCancelled'
-    if (e.code === 'DECRYPT_FAILED' || e.code === 'VAULT_FORMAT_INVALID') return 'errors.goalDecrypt'
+    if (e.code === 'DECRYPT_FAILED' || e.code === 'VAULT_FORMAT_INVALID') return 'errors.pocketDecrypt'
     return 'errors.generic'
   }
   const text = `${String(e)} ${errorMessage(e)}`
