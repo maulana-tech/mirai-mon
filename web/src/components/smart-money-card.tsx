@@ -22,12 +22,21 @@ export function SmartMoneyCard({ active }: { active: boolean }) {
       notation: compact ? 'compact' : 'standard',
       maximumFractionDigits: compact ? 1 : 0,
     }).format(n)
-  const pct = (n: number) =>
-    new Intl.NumberFormat(intlLocale(locale), {
-      style: 'percent',
-      maximumFractionDigits: 1,
-      signDisplay: 'exceptZero',
-    }).format(n / 100)
+  // Net flow under $1 is noise; show a dash instead of "+$0".
+  const flow = (n?: number) =>
+    n === undefined || Math.abs(n) < 1
+      ? '–'
+      : new Intl.NumberFormat(intlLocale(locale), {
+          style: 'currency',
+          currency: 'USD',
+          notation: 'compact',
+          maximumFractionDigits: 1,
+          signDisplay: 'exceptZero',
+        }).format(n)
+  const flowTone = (n?: number) =>
+    n === undefined || Math.abs(n) < 1 ? 'text-muted-foreground' : n < 0 ? 'text-destructive' : 'text-primary-ink'
+  const movers = info?.movers ?? []
+  const hasFlows = info?.holdings.some((h) => h.flow24hUsd !== undefined) ?? false
   const nansen = info?.source === 'nansen'
 
   return (
@@ -70,16 +79,42 @@ export function SmartMoneyCard({ active }: { active: boolean }) {
           )}
         </div>
 
+        {nansen && movers.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+              {t('market.moversTitle')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {movers.map((m) => (
+                <span
+                  key={m.address}
+                  className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm tabular-nums"
+                >
+                  <CoinIcon symbol={m.symbol} size={18} fallbackSrc={m.logo} />
+                  <span className="font-medium">{m.symbol}</span>
+                  <span className="text-xs text-primary-ink">{flow(m.flow24hUsd)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {nansen && info.holdings.length > 0 && (
           <div className="space-y-2">
             <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
               {t('market.holdingsTitle')}
             </p>
             <ul className="divide-y rounded-xl border text-sm">
+              {hasFlows && (
+                <li className="flex items-center justify-end gap-3 px-3 py-1.5 text-[10px] tracking-wider text-muted-foreground uppercase">
+                  <span>{t('market.colHeld')}</span>
+                  <span className="w-24 text-right whitespace-nowrap">{t('market.colFlow')}</span>
+                </li>
+              )}
               {info.holdings.map((h) => (
                 <li key={h.symbol} className="flex items-center justify-between gap-3 px-3 py-2">
                   <span className="flex min-w-0 items-center gap-2 font-medium">
-                    <CoinIcon symbol={h.symbol} size={20} />
+                    <CoinIcon symbol={h.symbol} size={20} fallbackSrc={h.logo} />
                     <span className="truncate">{h.symbol}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3 tabular-nums">
@@ -87,18 +122,9 @@ export function SmartMoneyCard({ active }: { active: boolean }) {
                       {h.holders === 1 ? t('market.holderOne') : t('market.holders', { n: h.holders })}
                     </span>
                     <span>{usd(h.valueUsd, true)}</span>
-                    <span
-                      className={cn(
-                        'w-14 text-right text-xs',
-                        Math.abs(h.change24hPct) < 0.05
-                          ? 'text-muted-foreground'
-                          : h.change24hPct < 0
-                            ? 'text-destructive'
-                            : 'text-primary-ink',
-                      )}
-                    >
-                      {Math.abs(h.change24hPct) < 0.05 ? '–' : pct(h.change24hPct)}
-                    </span>
+                    {hasFlows && (
+                      <span className={cn('w-24 text-right text-xs', flowTone(h.flow24hUsd))}>{flow(h.flow24hUsd)}</span>
+                    )}
                   </span>
                 </li>
               ))}
