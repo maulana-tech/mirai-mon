@@ -17,6 +17,7 @@ function base(event: EventMeta, user: string) {
     timestamp: BigInt(event.block.timestamp),
     txHash: event.transaction.hash,
     from: undefined,
+    to: undefined,
     amount: undefined,
     saved: undefined,
     shares: undefined,
@@ -45,6 +46,11 @@ async function saver(context: EvmOnEventContext, user: string): Promise<Saver> {
 indexer.onEvent({ contract: "Mirai", event: "PaymentRouted" }, async ({ event, context }) => {
   const { from, to, amount, savingsAmount, shares } = event.params;
   context.Activity.set({ ...base(event, to), kind: "pay", from: lc(from), amount, saved: savingsAmount, shares });
+  // The payer sees the money leave too (a self-payment is just the "pay" row).
+  if (lc(from) !== lc(to)) {
+    const sent = base(event, from);
+    context.Activity.set({ ...sent, id: `${sent.id}_sent`, kind: "sent", to: lc(to), amount });
+  }
 
   const s = await saver(context, to);
   context.Saver.set({
