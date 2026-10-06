@@ -13,6 +13,7 @@ import { useAppState } from '@/lib/app-state'
 import { CONTRACT_ID } from '@/lib/config'
 import { parseAusd } from '@/lib/format'
 import { formatMoney, useT } from '@/lib/i18n'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { mirai } from '@/lib/mirai'
 import { secondaryCurrencyFor, useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,7 @@ function tryParse(raw: string): bigint | null {
 /** Send AUSD to any Mirai user; their split rule saves part of it the moment it lands. */
 export function SendPage() {
   const t = useT()
+  const pendingLabel = usePendingLabel()
   const { address } = useWallet()
   const { busy, rates, runAction } = useAppState()
   const { locale, primaryCurrency } = useSettings()
@@ -102,7 +104,7 @@ export function SendPage() {
 
   const buttonLabel =
     busy === 'send'
-      ? `${t('common.loading')}...`
+      ? pendingLabel
       : amount === null
         ? t('withdraw.enterAmount')
         : t('send.button', { amount: formatMoney(amount, 'ausd', rates, locale) })
