@@ -89,8 +89,15 @@ function signerFromPrf(prfOutput: Uint8Array): MeraSigner {
   }
 }
 
+const lockHooks = new Set<() => void>()
+/** Runs `fn` whenever the session ends, so other in-memory secrets (pocket labels) go with the key. */
+export function onLock(fn: () => void) {
+  lockHooks.add(fn)
+}
+
 /** Ends the signing session now; the key is zeroed and the next write asks for the passkey. */
 export function lock() {
+  lockHooks.forEach((fn) => fn())
   clearTimeout(sessionTimer)
   signer?.end()
   signer = null
@@ -98,7 +105,9 @@ export function lock() {
 }
 
 function startSession(next: MeraSigner, credentialId: string): string {
-  lock()
+  // a fresh ceremony replaces the signer without ending the session's other secrets
+  clearTimeout(sessionTimer)
+  signer?.end()
   signer = next
   saveCachedAccount({ address: next.address, credentialId })
   sessionTimer = setTimeout(lock, SESSION_TTL_MS)
