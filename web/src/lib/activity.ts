@@ -7,10 +7,12 @@ import type { ActivityItem } from '@/lib/types'
 const iface = new Interface([
   'event PaymentRouted(address indexed from,address indexed to,uint256 amount,uint256 spendAmount,uint256 savingsAmount,uint256 shares)',
   'event SpendWithdrawn(address indexed user,uint256 amount)',
-  'event SavingsWithdrawn(address indexed user,uint256 shares,uint256 amountOut)',
   'event SplitSet(address indexed user,uint16 bps)',
-  'event LockSet(address indexed user,uint64 until)',
-  'event StrategySet(address indexed user,uint8 strategy,uint256 moved)',
+  'event PocketCreated(address indexed user,uint256 indexed pocket,uint8 strategy)',
+  'event PocketStrategySet(address indexed user,uint256 indexed pocket,uint8 strategy,uint256 moved)',
+  'event PocketLockSet(address indexed user,uint256 indexed pocket,uint64 until)',
+  'event PocketWithdrawn(address indexed user,uint256 indexed pocket,uint256 amount)',
+  'event PocketClosed(address indexed user,uint256 indexed pocket,uint256 indexed into,uint256 moved)',
 ])
 
 // ─── Envio indexer (full history) ────────────────────────────────────────────
@@ -25,17 +27,19 @@ type IndexedActivity = {
   txHash: string
   from: string | null
   to: string | null
+  custom: boolean | null
   amount: string | null
   saved: string | null
   shares: string | null
   bps: number | null
   until: string | null
   strategy: number | null
+  pocket: number | null
 }
 
 const ACTIVITY_QUERY = `query Activity($user: String!) {
   Activity(where: { user: { _eq: $user } }, order_by: { timestamp: desc }, limit: 200) {
-    id kind timestamp txHash from to amount saved shares bps until strategy
+    id kind timestamp txHash from to amount saved shares bps until strategy custom pocket
   }
 }`
 
@@ -57,13 +61,32 @@ async function fetchIndexedActivity(user: string): Promise<ActivityItem[]> {
     txHash: a.txHash,
     from: a.from ?? undefined,
     to: a.to ?? undefined,
+    custom: a.custom ?? undefined,
     amount: big(a.amount),
     saved: big(a.saved),
     shares: big(a.shares),
     bps: a.bps ?? undefined,
     until: big(a.until),
     strategy: a.strategy ?? undefined,
+    pocket: a.pocket ?? undefined,
   }))
+}
+
+/** Net deposits per pocket id from the indexer (PocketFlow); null without an indexer. */
+export async function fetchPocketFlows(user: string): Promise<Record<number, bigint> | null> {
+  if (!INDEXER_URL) return null
+  const res = await fetch(INDEXER_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      query: 'query F($user: String!) { PocketFlow(where: { user: { _eq: $user } }) { pocket deposited } }',
+      variables: { user: user.toLowerCase() },
+    }),
+  }).catch(() => null)
+  if (!res?.ok) return null
+  const body = (await res.json()) as { data?: { PocketFlow: { pocket: number; deposited: string }[] } }
+  if (!body.data) return null
+  return Object.fromEntries(body.data.PocketFlow.map((f) => [f.pocket, BigInt(f.deposited)]))
 }
 
 export type ProtocolStats = { volume: bigint; saved: bigint; payments: number; savers: number }
@@ -128,14 +151,19 @@ function decodeLog(log: Log, user: string): DecodedLog | null {
       }
     case 'SpendWithdrawn':
       return { ...base, kind: 'wd_spend', amount: BigInt(args.amount) }
-    case 'SavingsWithdrawn':
-      return { ...base, kind: 'wd_save', shares: BigInt(args.shares), amount: BigInt(args.amountOut) }
     case 'SplitSet':
       return { ...base, kind: 'split', bps: Number(args.bps) }
-    case 'StrategySet':
-      return { ...base, kind: 'strategy', strategy: Number(args.strategy), amount: BigInt(args.moved) }
-    case 'LockSet':
-      return { ...base, kind: 'lock', until: BigInt(args.until) }
+    case 'PocketWithdrawn':
+      return { ...base, kind: 'wd_save', pocket: Number(args.pocket), amount: BigInt(args.amount) }
+    case 'PocketStrategySet':
+      return { ...base, kind: 'strategy', pocket: Number(args.pocket), strategy: Number(args.strategy), amount: BigInt(args.moved) }
+    case 'PocketLockSet':
+      return { ...base, kind: 'lock', pocket: Number(args.pocket), until: BigInt(args.until) }
+    case 'PocketCreated':
+      if (Number(args.pocket) === 0) return null // the default pocket, opened implicitly
+      return { ...base, kind: 'pocket_new', pocket: Number(args.pocket), strategy: Number(args.strategy) }
+    case 'PocketClosed':
+      return { ...base, kind: 'pocket_close', pocket: Number(args.pocket), amount: BigInt(args.moved) }
     default:
       return null
   }
