@@ -13,6 +13,8 @@ import { Landing } from '@/pages/landing'
 import { MarketPage } from '@/pages/market'
 import { NotFoundPage } from '@/pages/not-found'
 import { PayPage } from '@/pages/pay'
+import { PocketPage } from '@/pages/pocket'
+import { PocketsPage } from '@/pages/pockets'
 import { PaymentLinkPage } from '@/pages/payment-link'
 import { RulesPage } from '@/pages/rules'
 import { SendPage } from '@/pages/send'
@@ -55,6 +57,8 @@ export function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="activity" element={<ActivityPage />} />
                   <Route path="faucet" element={<FaucetPage />} />
+                  <Route path="pockets" element={<PocketsPage />} />
+                  <Route path="pockets/:id" element={<PocketPage />} />
                   <Route path="yield" element={<YieldPage />} />
                   <Route path="market" element={<MarketPage />} />
                   <Route path="send" element={<SendPage />} />
