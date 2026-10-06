@@ -30,6 +30,7 @@ import {
 import { useSettings } from '@/lib/settings'
 import { MARKET_STRATEGY } from '@/lib/strategies'
 import { cn } from '@/lib/utils'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { useWallet } from '@/lib/wallet'
 
 const PRESETS: { label: MessageKey; weights: Weights }[] = [
@@ -173,6 +174,7 @@ function InvestCard() {
   const { account, busy, runAction, refresh } = useAppState()
   const active = account?.strategy === MARKET_STRATEGY
   const pending = busy === `strategy-${MARKET_STRATEGY}`
+  const pendingLabel = usePendingLabel()
 
   const invest = async () => {
     if (!address) return
@@ -201,7 +203,7 @@ function InvestCard() {
         ) : (
           <Button className="rounded-full" disabled={busy !== null || !account} onClick={() => void invest()}>
             {pending && <Loader2Icon className="mr-2 size-4 animate-spin" />}
-            {account && account.savings > 0n ? t('pool.investMove') : t('pool.investStart')}
+            {pending ? pendingLabel : account && account.savings > 0n ? t('pool.investMove') : t('pool.investStart')}
           </Button>
         )}
         <p className="text-xs text-muted-foreground">{t('pool.investNote')}</p>
