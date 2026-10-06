@@ -1,22 +1,26 @@
-import { Contract, Interface, ZeroAddress, formatUnits, toUtf8Bytes, toUtf8String, type ContractRunner } from 'ethers'
+import { Contract, Interface, ZeroAddress, formatUnits, type ContractRunner } from 'ethers'
 import { MIRAI_ADDRESS, readProvider } from '@/lib/config'
 import { getAusdBalance, signPermit } from '@/lib/ausd'
 import { getSigner } from '@/lib/wallet'
 import { MARKET_STRATEGY } from '@/lib/strategies'
-import type { MarketBasket, MiraiAccount, MiraiService, StrategyId } from '@/lib/types'
+import type { BasketState, MiraiAccount, MiraiService, Pocket, StrategyId } from '@/lib/types'
 
 const MIRAI_ABI = [
-  'function accountOf(address user) view returns ((uint16 splitBps,uint128 spend,uint128 shares,uint256 savings,uint64 lockUntil,uint8 strategy))',
+  'function accountOf(address user) view returns ((uint16 splitBps,uint128 spend,uint256 savings,uint8 pocketCount))',
+  'function pocketsOf(address user) view returns ((uint16 shareBps,uint8 strategy,bool open,uint64 lockUntil,uint128 shares,uint256 value,bytes meta)[])',
   'function strategies() view returns (address[4] vaults,address[4] yieldSources)',
-  'function setStrategy(address user,uint8 strategy)',
   'function payWithPermit(address from,address to,uint256 amount,uint256 deadline,uint8 v,bytes32 r,bytes32 s)',
   'function withdrawSpend(address user,uint256 amount) returns (uint256)',
-  'function withdrawSavings(address user,uint256 amount) returns (uint256)',
-  'function withdrawAllSavings(address user) returns (uint256)',
   'function setSplit(address user,uint16 bps)',
-  'function setLock(address user,uint64 until)',
-  'function setGoal(address user,bytes encrypted)',
-  'function goalOf(address user) view returns (bytes)',
+  'function createPocket(address user,uint8 strategy,bytes meta) returns (uint256)',
+  'function setPocketShares(address user,uint16[] bps)',
+  'function setPocketStrategy(address user,uint256 id,uint8 strategy)',
+  'function setPocketMeta(address user,uint256 id,bytes meta)',
+  'function setPocketLock(address user,uint256 id,uint64 until)',
+  'function withdrawPocket(address user,uint256 id,uint256 amount) returns (uint256)',
+  'function withdrawAllPocket(address user,uint256 id) returns (uint256)',
+  'function closePocket(address user,uint256 id,uint256 into)',
+  'event PocketCreated(address indexed user,uint256 indexed pocket,uint8 strategy)',
   'error InvalidAddress()',
   'error InvalidAmount()',
   'error InvalidBps()',
@@ -30,14 +34,29 @@ const MIRAI_ABI = [
   'error Unauthorized()',
   'error GoalTooLarge()',
   'error InvalidStrategy()',
+  'error InvalidPocket()',
+  'error TooManyPockets()',
+  'error InvalidShares()',
+  // BasketVault (the invest strategy)
+  'error InvalidWeights()',
+  'error InvalidPrice()',
+  'error InsufficientValue()',
 ] as const
 
 const STREAMER_ABI = ['function aprBps() view returns (uint16)'] as const
-const MARKET_ABI = [
-  'function basket() view returns (address[] feeds,uint16[] weights,uint256[] units,uint256[] prices)',
+const BASKET_ABI = [
+  'function assets() view returns ((string symbol,address feed,bool meme)[])',
+  'function prices() view returns (uint256[])',
+  'function smartWeights() view returns (uint16[])',
+  'function weightsOf(address user,uint256 pocket) view returns (uint16[])',
+  'function holder(address user,uint256 pocket) view returns ((bool custom,uint64 epoch))',
+  'function unitsOf(address user,uint256 pocket) view returns (uint256[])',
+  'function setWeights(address user,uint256 pocket,uint16[] weights)',
+  'error Unauthorized()',
+  'error InvalidWeights()',
+  'error InvalidPrice()',
+  'error InsufficientValue()',
 ] as const
-/** MarketVault coins in vault order (DeployMirai.s.sol). */
-const MARKET_SYMBOLS = ['BTC', 'ETH']
 
 const VAULT_ABI = ['function totalAssets() view returns (uint256)'] as const
 
@@ -55,6 +74,12 @@ const ERROR_CODES: Record<string, number> = {
   Unauthorized: 11,
   GoalTooLarge: 12,
   InvalidStrategy: 13,
+  InvalidWeights: 14,
+  InvalidPrice: 15,
+  InsufficientValue: 4,
+  InvalidPocket: 16,
+  TooManyPockets: 17,
+  InvalidShares: 18,
 }
 
 // A signed permit stays valid this long, covering a slow passkey prompt before submission.
@@ -122,17 +147,39 @@ async function sendTx(txPromise: Promise<{ hash: string; wait: () => Promise<unk
   }
 }
 
+type RawPocket = {
+  shareBps: bigint
+  strategy: bigint
+  open: boolean
+  lockUntil: bigint
+  shares: bigint
+  value: bigint
+  meta: string
+}
+
+async function pocketSlots(user: string): Promise<RawPocket[]> {
+  return [...((await reader().pocketsOf(user)) as RawPocket[])]
+}
+
 export const miraiEvm: MiraiService = {
   async getAccount(user: string): Promise<MiraiAccount> {
-    const acc = await reader().accountOf(user)
-    return {
-      splitBps: Number(acc.splitBps),
-      spend: BigInt(acc.spend),
-      shares: BigInt(acc.shares),
-      savings: BigInt(acc.savings),
-      lockUntil: BigInt(acc.lockUntil),
-      strategy: Number(acc.strategy) as StrategyId,
-    }
+    const [acc, slots] = await Promise.all([reader().accountOf(user), pocketSlots(user)])
+    const pockets: Pocket[] = slots.flatMap((p, id) =>
+      p.open
+        ? [
+            {
+              id,
+              shareBps: Number(p.shareBps),
+              strategy: Number(p.strategy) as StrategyId,
+              lockUntil: BigInt(p.lockUntil),
+              shares: BigInt(p.shares),
+              value: BigInt(p.value),
+              meta: p.meta,
+            },
+          ]
+        : [],
+    )
+    return { splitBps: Number(acc.splitBps), spend: BigInt(acc.spend), savings: BigInt(acc.savings), pockets }
   },
 
   async getStrategies() {
@@ -143,19 +190,42 @@ export const miraiEvm: MiraiService = {
     return vaults.map((_, i) => ({ id: i as StrategyId, aprBps: aprs[i], totalAssets: totals[i] }))
   },
 
-  async getBasket(): Promise<MarketBasket> {
+  async getBasket(user?: string, pocket = 0): Promise<BasketState> {
     const { vaults } = await strategyConfigOnce()
-    const b = await new Contract(vaults[MARKET_STRATEGY], MARKET_ABI, readProvider).basket()
-    const coins = [...b.weights].map((w: bigint, i: number) => {
-      const priceUsd = Number(formatUnits(b.prices[i], 18))
-      return {
-        symbol: MARKET_SYMBOLS[i] ?? `#${i}`,
-        weightBps: Number(w),
-        priceUsd,
-        valueUsd: Number(formatUnits(b.units[i], 18)) * priceUsd,
-      }
-    })
-    return { coins, valueUsd: coins.reduce((s, c) => s + c.valueUsd, 0) }
+    const basket = new Contract(vaults[MARKET_STRATEGY], BASKET_ABI, readProvider)
+    const [assets, prices, smart, mine] = await Promise.all([
+      basket.assets() as Promise<{ symbol: string; feed: string; meme: boolean }[]>,
+      basket.prices() as Promise<bigint[]>,
+      basket.smartWeights() as Promise<bigint[]>,
+      user
+        ? Promise.all([basket.holder(user, pocket), basket.weightsOf(user, pocket), basket.unitsOf(user, pocket)])
+        : Promise.resolve(null),
+    ])
+    const priceUsd = prices.map((p) => Number(formatUnits(p, 18)))
+    return {
+      assets: assets.map((a, id) => ({
+        id,
+        symbol: a.symbol,
+        kind: a.meme ? 'meme' : /^USD/.test(a.symbol) ? 'stable' : 'blue',
+        priceUsd: priceUsd[id],
+        oracle: a.feed === ZeroAddress ? 'curator' : 'chainlink',
+      })),
+      smartBps: smart.map(Number),
+      mine: mine && {
+        custom: Boolean(mine[0].custom),
+        bps: [...(mine[1] as bigint[])].map(Number),
+        valueUsd: [...(mine[2] as bigint[])].map((u, i) => Number(formatUnits(u, 18)) * priceUsd[i]),
+      },
+    }
+  },
+
+  async setBasketWeights(user: string, pocket: number, bps: number[] | null) {
+    const signer = await getSigner()
+    if (signer.address.toLowerCase() !== user.toLowerCase()) throw new Error('wallet_passkey_mismatch')
+    const { vaults } = await strategyConfigOnce()
+    const basket = new Contract(vaults[MARKET_STRATEGY], BASKET_ABI, signer as ContractRunner)
+    const hash = await sendTx(basket.setWeights(user, pocket, bps ?? []))
+    return { hash }
   },
 
   async pay(from: string, to: string, amount: bigint) {
@@ -175,42 +245,67 @@ export const miraiEvm: MiraiService = {
     return { hash }
   },
 
-  async withdrawSavings(user: string, amount: bigint) {
-    const c = await signerContract(user, true) // touches savings: always confirm with the passkey
-    // "Everything" redeems every share: a market-strategy balance can drop between reading it and
-    // the transaction landing, and a fixed amount would then revert with InsufficientShares.
-    const { savings } = await reader().accountOf(user)
-    const all = amount >= BigInt(savings)
-    const hash = await sendTx(all ? c.withdrawAllSavings(user) : c.withdrawSavings(user, amount))
-    return { amount: all ? BigInt(savings) : amount, hash }
-  },
-
   async setSplit(user: string, bps: number) {
     const c = await signerContract(user)
     const hash = await sendTx(c.setSplit(user, bps))
     return { hash }
   },
 
-  async setLock(user: string, until: bigint) {
+  async createPocket(user: string, strategy: StrategyId, meta: string) {
+    const c = await signerContract(user)
+    try {
+      const tx = await c.createPocket(user, strategy, meta)
+      const receipt = await tx.wait()
+      const log = receipt.logs.map((l: { topics: string[]; data: string }) => iface.parseLog(l)).find(
+        (l: { name: string } | null) => l?.name === 'PocketCreated',
+      )
+      return { hash: tx.hash as string, id: Number(log.args.pocket) }
+    } catch (error) {
+      throw asContractError(error) ?? error
+    }
+  },
+
+  async setPocketShares(user: string, bps: Record<number, number>) {
+    const c = await signerContract(user)
+    // The contract wants one entry per slot (closed ones too). The RPC can lag a block behind right
+    // after createPocket, so never size below the highest pocket id given (or 1 for a fresh account).
+    const ids = Object.keys(bps).map(Number)
+    const slots = Math.max((await pocketSlots(user)).length, ...ids.map((i) => i + 1), 1)
+    const hash = await sendTx(c.setPocketShares(user, Array.from({ length: slots }, (_, i) => bps[i] ?? 0)))
+    return { hash }
+  },
+
+  async setPocketStrategy(user: string, pocket: number, strategy: StrategyId) {
+    const c = await signerContract(user)
+    const hash = await sendTx(c.setPocketStrategy(user, pocket, strategy))
+    return { hash }
+  },
+
+  async setPocketMeta(user: string, pocket: number, meta: string) {
+    const c = await signerContract(user)
+    const hash = await sendTx(c.setPocketMeta(user, pocket, meta))
+    return { hash }
+  },
+
+  async setPocketLock(user: string, pocket: number, until: bigint) {
     const c = await signerContract(user, true) // a lock can't be shortened: always confirm with the passkey
-    const hash = await sendTx(c.setLock(user, until))
+    const hash = await sendTx(c.setPocketLock(user, pocket, until))
     return { hash }
   },
 
-  async setStrategy(user: string, strategy: StrategyId) {
-    const c = await signerContract(user)
-    const hash = await sendTx(c.setStrategy(user, strategy))
-    return { hash }
+  async withdrawPocket(user: string, pocket: number, amount: bigint) {
+    const c = await signerContract(user, true) // touches savings: always confirm with the passkey
+    // "Everything" sells/redeems it all: an invest pocket can drop between reading it and the tx
+    // landing, and a fixed amount would then revert with InsufficientShares.
+    const value = BigInt((await pocketSlots(user))[pocket]?.value ?? 0n)
+    const all = amount >= value
+    const hash = await sendTx(all ? c.withdrawAllPocket(user, pocket) : c.withdrawPocket(user, pocket, amount))
+    return { amount: all ? value : amount, hash }
   },
 
-  async getGoal(user: string) {
-    const raw: string = await reader().goalOf(user)
-    return raw === '0x' ? null : toUtf8String(raw)
-  },
-
-  async setGoal(user: string, encrypted: string) {
-    const c = await signerContract(user)
-    const hash = await sendTx(c.setGoal(user, toUtf8Bytes(encrypted)))
+  async closePocket(user: string, pocket: number, into: number) {
+    const c = await signerContract(user, true) // moves savings: confirm with the passkey
+    const hash = await sendTx(c.closePocket(user, pocket, into))
     return { hash }
   },
 }
