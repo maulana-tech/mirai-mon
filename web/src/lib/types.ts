@@ -1,6 +1,23 @@
 /** 0 conservative, 1 balanced (default), 2 growth (yield), 3 smart money (market basket); matches Mirai.sol. */
 export type StrategyId = 0 | 1 | 2 | 3
 
+/** One entry of an account's activity feed (indexer or recent RPC logs). */
+export type ActivityItem = {
+  id: string
+  kind: 'pay' | 'sent' | 'wd_spend' | 'wd_save' | 'split' | 'lock' | 'strategy'
+  at: Date
+  txHash: string
+  from?: string
+  /** Recipient of a payment this account sent. */
+  to?: string
+  amount?: bigint
+  saved?: bigint
+  shares?: bigint
+  bps?: number
+  until?: bigint
+  strategy?: number
+}
+
 export type MiraiAccount = {
   splitBps: number
   spend: bigint
