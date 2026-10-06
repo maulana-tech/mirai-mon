@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CircleCheckIcon, Loader2Icon } from 'lucide-react'
+import { ArrowRightIcon } from 'lucide-react'
 import { CoinIcon } from '@/components/brand/coin-icon'
 import { MarketBoard } from '@/components/market-board'
 import { PageHeader } from '@/components/page-header'
@@ -16,7 +16,6 @@ import { useAppState } from '@/lib/app-state'
 import { intlLocale, useT, type MessageKey } from '@/lib/i18n'
 import { useMarket } from '@/lib/market'
 import { fetchHistory, useMarketBoard } from '@/lib/market-data'
-import { mirai } from '@/lib/mirai'
 import {
   POOL_ASSETS,
   backtest,
@@ -28,10 +27,7 @@ import {
   type Weights,
 } from '@/lib/pool'
 import { useSettings } from '@/lib/settings'
-import { MARKET_STRATEGY } from '@/lib/strategies'
 import { cn } from '@/lib/utils'
-import { usePendingLabel } from '@/lib/use-pending-label'
-import { useWallet } from '@/lib/wallet'
 
 const PRESETS: { label: MessageKey; weights: Weights }[] = [
   { label: 'pool.presetCrypto', weights: { BTC: 40, ETH: 30, SOL: 10, AUSD: 20 } },
@@ -167,51 +163,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'up
   )
 }
 
-/** The step from simulation to action: Smart Money is the basket savings can really go into. */
-function InvestCard() {
-  const t = useT()
-  const { address } = useWallet()
-  const { account, busy, runAction, refresh } = useAppState()
-  const active = account?.strategy === MARKET_STRATEGY
-  const pending = busy === `strategy-${MARKET_STRATEGY}`
-  const pendingLabel = usePendingLabel()
-
-  const invest = async () => {
-    if (!address) return
-    const ok = await runAction(`strategy-${MARKET_STRATEGY}`, 'strategy.switched', () =>
-      mirai.setStrategy(address, MARKET_STRATEGY),
-    )
-    if (ok) void refresh()
-  }
-
-  return (
-    <Card className="rounded-2xl shadow-none">
-      <CardHeader>
-        <CardTitle>{t('pool.investTitle')}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t('pool.investCaption')}</p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {!address ? (
-          <Button asChild className="rounded-full">
-            <Link to="/app">{t('pool.signInToInvest')}</Link>
-          </Button>
-        ) : active ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-primary-ink">
-            <CircleCheckIcon className="size-5" />
-            {t('pool.investActive')}
-          </p>
-        ) : (
-          <Button className="rounded-full" disabled={busy !== null || !account} onClick={() => void invest()}>
-            {pending && <Loader2Icon className="mr-2 size-4 animate-spin" />}
-            {pending ? pendingLabel : account && account.savings > 0n ? t('pool.investMove') : t('pool.investStart')}
-          </Button>
-        )}
-        <p className="text-xs text-muted-foreground">{t('pool.investNote')}</p>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function MarketPage() {
   const t = useT()
   const { locale } = useSettings()
@@ -237,13 +188,7 @@ export function MarketPage() {
       .catch(() => setHistoryError(true))
   }, [])
 
-  // The Smart Money preset is the vault's own basket, as Nansen weighted it today.
-  const smartMoney: Weights | null =
-    info?.source === 'nansen' && info.weights.length
-      ? Object.fromEntries(info.weights.map((w) => [w.symbol, Math.round(w.bps / 100)]))
-      : null
-  // Open on today's Smart Money basket once Nansen answers, until the user picks a mix.
-  const weights = picked ?? smartMoney ?? PRESETS[0].weights
+  const weights = picked ?? PRESETS[0].weights
   // Simulate the saver's own savings by default, until they type an amount.
   const savingsUnits = account && account.savings > 0n ? Number(account.savings) / Number(AUSD_SCALE) : 100
   const amountText = amount ?? String(Math.round(savingsUnits * 100) / 100)
@@ -276,10 +221,17 @@ export function MarketPage() {
       <PageHeader title={t('nav.market')} caption={t('page.marketCaption')} />
       <MarketBoard {...board} onRefresh={() => void board.refresh()} />
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <SmartMoneyCard active={account?.strategy === MARKET_STRATEGY} />
-        <InvestCard />
-      </div>
+      <SmartMoneyCard info={info} />
+      <Link
+        to="/app/pockets"
+        className="flex items-center justify-between gap-4 rounded-2xl border bg-card p-5 transition-colors hover:border-primary/50"
+      >
+        <span>
+          <span className="block font-semibold">{t('pockets.investCta')}</span>
+          <span className="mt-1 block text-sm text-muted-foreground">{t('pockets.investCtaCaption')}</span>
+        </span>
+        <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground" />
+      </Link>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Builder */}
@@ -290,11 +242,6 @@ export function MarketPage() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex flex-wrap gap-2">
-              {smartMoney && (
-                <Button size="sm" className="rounded-full" onClick={() => setWeights(smartMoney)}>
-                  {t('pool.presetSmartMoney')}
-                </Button>
-              )}
               {PRESETS.map((p) => (
                 <Button
                   key={p.label}
