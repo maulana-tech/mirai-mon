@@ -20,6 +20,7 @@ import { useWallet } from '@/lib/wallet'
 
 const ICONS: Record<ActivityItem['kind'], typeof LockIcon> = {
   pay: ArrowDownLeftIcon,
+  sent: ArrowUpRightIcon,
   wd_spend: ArrowUpRightIcon,
   wd_save: ArrowUpRightIcon,
   split: SlidersHorizontalIcon,
@@ -32,6 +33,7 @@ const ICONS: Record<ActivityItem['kind'], typeof LockIcon> = {
 // where a soft wash reads fine.
 const KIND_TINT: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
   pay: { bg: 'bg-primary/15', fg: 'text-primary-ink' },
+  sent: { bg: 'bg-primary/15', fg: 'text-primary-ink' },
   wd_spend: { bg: 'bg-primary/15', fg: 'text-primary-ink' },
   wd_save: { bg: 'bg-primary/15', fg: 'text-primary-ink' },
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
@@ -43,6 +45,7 @@ const KIND_TINT: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
 // ~16px, and a soft tint at that size just reads as a blur - small marks need real contrast.
 const KIND_TINT_SOLID: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
   pay: { bg: 'bg-primary', fg: 'text-primary-foreground' },
+  sent: { bg: 'bg-primary', fg: 'text-primary-foreground' },
   wd_spend: { bg: 'bg-primary', fg: 'text-primary-foreground' },
   wd_save: { bg: 'bg-primary', fg: 'text-primary-foreground' },
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
@@ -55,7 +58,7 @@ type ActivityListProps = {
   loading: boolean
 }
 
-const TOKEN_KINDS: readonly ActivityItem['kind'][] = ['pay', 'wd_spend', 'wd_save']
+const TOKEN_KINDS: readonly ActivityItem['kind'][] = ['pay', 'sent', 'wd_spend', 'wd_save']
 
 export function ActivityList({ items, loading }: ActivityListProps) {
   const { rates } = useAppState()
@@ -70,6 +73,8 @@ export function ActivityList({ items, loading }: ActivityListProps) {
     switch (item.kind) {
       case 'pay':
         return t('activity.pay', { amount: money(item.amount), saved: money(item.saved) })
+      case 'sent':
+        return t('activity.sent', { amount: money(item.amount) })
       case 'wd_spend':
         return t('activity.wdSpend', { amount: money(item.amount) })
       case 'wd_save':
