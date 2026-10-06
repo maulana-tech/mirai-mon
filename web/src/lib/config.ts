@@ -7,7 +7,7 @@ export const EXPLORER_URL = import.meta.env.VITE_MONAD_EXPLORER_URL ?? 'https://
 
 // Mirai on Monad Testnet (deployments.json). Set VITE_MIRAI_ADDRESS="" to run the in-memory mock.
 export const MIRAI_ADDRESS: string =
-  import.meta.env.VITE_MIRAI_ADDRESS ?? '0x8898BB4870e9757773E3E49E4Fe0caFAa00665b1'
+  import.meta.env.VITE_MIRAI_ADDRESS ?? '0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83'
 // Agora AUSD and its public faucet (https://docs.agora.finance/developer/contract-deployments)
 export const AUSD_ADDRESS: string =
   import.meta.env.VITE_AUSD_ADDRESS ?? '0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC'
