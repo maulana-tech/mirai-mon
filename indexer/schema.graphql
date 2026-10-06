@@ -14,6 +14,11 @@ type Activity {
   bps: Int
   until: BigInt
   strategy: Int
+  # pocket slot the row is about (withdrawals, locks, strategy moves, baskets, open/close)
+  pocket: Int
+  # basket: true = the saver's own mix, false = follows Smart Money; weights in bps per basket asset
+  custom: Boolean
+  weights: [Int!]
 }
 
 # Running per-account totals, so lifetime numbers need no log scan.
@@ -24,8 +29,15 @@ type Saver {
   totalWithdrawn: BigInt!
   payments: Int!
   splitBps: Int
-  lockUntil: BigInt
-  strategy: Int
+}
+
+# Net deposits per pocket slot (id "<user>_<pocket>"): what payments put in minus what was withdrawn.
+# Earnings = the pocket's on-chain value minus this. Reset when a closed slot is reused.
+type PocketFlow {
+  id: ID!
+  user: String! @index
+  pocket: Int!
+  deposited: BigInt!
 }
 
 # Protocol-wide totals (single row, id "mirai").
