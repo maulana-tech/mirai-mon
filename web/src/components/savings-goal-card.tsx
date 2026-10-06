@@ -12,6 +12,7 @@ import { errorKey } from '@/lib/errors'
 import { ausdToInput, parseAusd } from '@/lib/format'
 import { decryptGoal, encryptGoal, type SavingsGoal } from '@/lib/goal'
 import { formatMoney, useT } from '@/lib/i18n'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { mirai } from '@/lib/mirai'
 import { useSettings } from '@/lib/settings'
 import { useWallet } from '@/lib/wallet'
@@ -21,6 +22,7 @@ type View = 'loading' | 'empty' | 'locked' | 'open' | 'edit'
 /** Private savings goal: stored on-chain as a passkey-encrypted vault, opened with one passkey tap. */
 export function SavingsGoalCard({ savings }: { savings: bigint }) {
   const t = useT()
+  const pendingLabel = usePendingLabel()
   const { address } = useWallet()
   const { busy, rates, runAction } = useAppState()
   const { locale } = useSettings()
@@ -28,6 +30,8 @@ export function SavingsGoalCard({ savings }: { savings: bigint }) {
   const [goal, setGoal] = useState<SavingsGoal | null>(null)
   const [view, setView] = useState<View>('loading')
   const [opening, setOpening] = useState(false)
+  // Encrypting and opening the goal each ask for the passkey (its own PRF namespace, not the signer).
+  const [encrypting, setEncrypting] = useState(false)
   const [name, setName] = useState('')
   const [target, setTarget] = useState('')
 
@@ -83,7 +87,12 @@ export function SavingsGoalCard({ savings }: { savings: bigint }) {
     const next = { name: name.trim(), target: parsedTarget }
     let vault = ''
     const result = await runAction('goal', 'goal.saved', async () => {
-      vault = await encryptGoal(next)
+      setEncrypting(true)
+      try {
+        vault = await encryptGoal(next)
+      } finally {
+        setEncrypting(false)
+      }
       return mirai.setGoal(address, vault)
     })
     if (result) {
@@ -135,7 +144,7 @@ export function SavingsGoalCard({ savings }: { savings: bigint }) {
             <p className="text-sm text-muted-foreground">{t('goal.lockedBody')}</p>
             <Button className="rounded-full" disabled={opening} onClick={() => void open()}>
               <FingerprintIcon />
-              {opening ? `${t('common.loading')}...` : t('goal.open')}
+              {opening ? t('common.confirmPasskey') : t('goal.open')}
             </Button>
           </div>
         )}
@@ -208,7 +217,7 @@ export function SavingsGoalCard({ savings }: { savings: bigint }) {
             <div className="flex gap-2">
               <Button className="rounded-full" disabled={busy !== null} onClick={() => void save()}>
                 <FingerprintIcon />
-                {busy === 'goal' ? `${t('common.loading')}...` : t('goal.save')}
+                {encrypting ? t('common.confirmPasskey') : busy === 'goal' ? pendingLabel : t('goal.save')}
               </Button>
               <Button
                 variant="ghost"
