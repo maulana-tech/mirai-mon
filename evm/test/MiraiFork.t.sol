@@ -5,7 +5,8 @@ import "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {Mirai, IYieldSource} from "../src/Mirai.sol";
+import {Mirai, IYieldSource, IBasket} from "../src/Mirai.sol";
+import {BasketVault} from "../src/BasketVault.sol";
 import {MiraiVault} from "../src/MiraiVault.sol";
 
 interface IAusdFaucet {
@@ -25,14 +26,12 @@ contract MiraiForkTest is Test {
 
         (address alice, uint256 alicePk) = makeAddrAndKey("alice");
         address bob = makeAddr("bob");
-        IERC4626[4] memory vs = [
-            IERC4626(new MiraiVault(IERC20(AUSD))),
-            new MiraiVault(IERC20(AUSD)),
-            new MiraiVault(IERC20(AUSD)),
-            new MiraiVault(IERC20(AUSD))
-        ];
-        IYieldSource[4] memory none;
-        Mirai mirai = new Mirai(vs, none);
+        IERC4626[3] memory vs =
+            [IERC4626(new MiraiVault(IERC20(AUSD))), new MiraiVault(IERC20(AUSD)), new MiraiVault(IERC20(AUSD))];
+        IYieldSource[3] memory none;
+        BasketVault basket = new BasketVault(IERC20(AUSD), address(this));
+        Mirai mirai = new Mirai(vs, none, IBasket(address(basket)));
+        basket.initMirai(address(mirai));
 
         IAusdFaucet(FAUCET).requestFunds(alice);
         uint256 amount = IERC20(AUSD).balanceOf(alice);
