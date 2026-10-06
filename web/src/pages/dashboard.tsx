@@ -4,14 +4,14 @@ import {
   ArrowRightIcon,
   ChartCandlestickIcon,
   Link2Icon,
+  PiggyBankIcon,
   SlidersHorizontalIcon,
-  TrendingUpIcon,
 } from 'lucide-react'
 import { ActivityCard } from '@/components/activity-card'
 import { BalanceHero } from '@/components/balance-hero'
 import { ConnectPrompt } from '@/components/connect-prompt'
 import { OnboardingChecklist } from '@/components/onboarding-checklist'
-import { SavingsGoalCard } from '@/components/savings-goal-card'
+import { PocketStrip } from '@/components/pocket-card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -37,10 +37,10 @@ const SECONDARY_ACTIONS: SecondaryAction[] = [
     tint: 'bg-accent text-accent-foreground',
   },
   {
-    to: '/app/yield',
-    icon: TrendingUpIcon,
-    title: 'nav.yield',
-    caption: 'page.yieldCaption',
+    to: '/app/pockets',
+    icon: PiggyBankIcon,
+    title: 'nav.pockets',
+    caption: 'page.pocketsCaption',
     tint: 'bg-gold/15 text-gold-ink',
   },
   {
@@ -87,7 +87,7 @@ export function Dashboard() {
       ) : (
         <BalanceHero account={account} activity={activity} loading={loading} rates={rates} />
       )}
-      {account !== null && <SavingsGoalCard savings={account.savings} />}
+      {account !== null && <PocketStrip account={account} />}
       {loading && <Skeleton className="h-40 w-full rounded-2xl" />}
       {account !== null && (
         <>
