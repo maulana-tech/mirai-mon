@@ -15,7 +15,7 @@ const FILTERS: { key: FilterKey; label: MessageKey; kinds: ActivityItem['kind'][
   { key: 'all', label: 'activity.filterAll', kinds: null },
   { key: 'payments', label: 'activity.filterPayments', kinds: ['pay', 'sent'] },
   { key: 'withdrawals', label: 'activity.filterWithdrawals', kinds: ['wd_spend', 'wd_save'] },
-  { key: 'changes', label: 'activity.filterChanges', kinds: ['split', 'lock', 'strategy'] },
+  { key: 'changes', label: 'activity.filterChanges', kinds: ['split', 'lock', 'strategy', 'basket'] },
 ]
 
 export function ActivityPage() {
