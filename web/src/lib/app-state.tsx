@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { fetchActivity, type ActivityItem } from '@/lib/activity'
+import { getAusdBalance } from '@/lib/ausd'
 import { mirai } from '@/lib/mirai'
 import { explorerTxUrl } from '@/lib/config'
 import { errorKey } from '@/lib/errors'
@@ -23,6 +24,8 @@ type AccountStatus = 'disconnected' | 'loading' | 'ready' | 'error'
 
 type AppStateValue = {
   account: MiraiAccount | null
+  /** AUSD in the user's own account (outside Mirai's pockets): onboarding funds, withdrawals, money to pay with. */
+  wallet: bigint | null
   accountStatus: AccountStatus
   rates: FxRates
   activity: ActivityItem[]
@@ -44,6 +47,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const { address } = useWallet()
   const t = useT()
   const [account, setAccount] = useState<MiraiAccount | null>(null)
+  const [wallet, setWallet] = useState<bigint | null>(null)
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('disconnected')
   const [rates, setRates] = useState<FxRates>(FALLBACK_RATES)
   const [activity, setActivity] = useState<ActivityItem[]>([])
@@ -59,15 +63,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async (addr: string, initial: boolean) => {
     if (initial) {
       setAccount(null)
+      setWallet(null)
       setAccountStatus('loading')
       setActivity([])
       setActivityLoading(true)
     }
-    const [accountResult, activityResult] = await Promise.allSettled([
+    const [accountResult, activityResult, walletResult] = await Promise.allSettled([
       mirai.getAccount(addr),
       fetchActivity(addr),
+      getAusdBalance(addr),
     ])
     if (addressRef.current !== addr) return
+    if (walletResult.status === 'fulfilled') setWallet(walletResult.value)
     if (accountResult.status === 'fulfilled') {
       setAccount(accountResult.value)
       setAccountStatus('ready')
@@ -88,6 +95,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     addressRef.current = address
     if (!address) {
       setAccount(null)
+      setWallet(null)
       setAccountStatus('disconnected')
       setActivity([])
       setActivityLoading(false)
@@ -142,6 +150,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       account,
+      wallet,
       accountStatus,
       rates,
       activity,
@@ -151,7 +160,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       refresh,
       runAction,
     }),
-    [account, accountStatus, rates, activity, activityLoading, historyFull, busy, refresh, runAction],
+    [account, wallet, accountStatus, rates, activity, activityLoading, historyFull, busy, refresh, runAction],
   )
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
