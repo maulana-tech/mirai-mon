@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useLenis } from 'lenis/react'
 import { useTheme } from 'next-themes'
 import {
   ActivityIcon,
@@ -110,6 +111,15 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
           <ActivityIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.activity')}</span>
         </NavLink>
+        <SectionLabel rail={rail}>{t('nav.features')}</SectionLabel>
+        <NavLink to="/app/link" onClick={onNavigate} className={navClass}>
+          <Link2Icon className="size-[18px] shrink-0" />
+          <span className={label}>{t('nav.paymentLink')}</span>
+        </NavLink>
+        <NavLink to="/app/rules" onClick={onNavigate} className={navClass}>
+          <SlidersHorizontalIcon className="size-[18px] shrink-0" />
+          <span className={label}>{t('nav.rules')}</span>
+        </NavLink>
         <NavLink to="/app/yield" onClick={onNavigate} className={navClass}>
           <TrendingUpIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.yield')}</span>
@@ -126,14 +136,6 @@ function SidebarContent({ rail = false, onNavigate, onToggle }: SidebarContentPr
         <NavLink to="/app/withdraw" onClick={onNavigate} className={navClass}>
           <ArrowUpRightIcon className="size-[18px] shrink-0" />
           <span className={label}>{t('nav.withdraw')}</span>
-        </NavLink>
-        <NavLink to="/app/rules" onClick={onNavigate} className={navClass}>
-          <SlidersHorizontalIcon className="size-[18px] shrink-0" />
-          <span className={label}>{t('nav.rules')}</span>
-        </NavLink>
-        <NavLink to="/app/link" onClick={onNavigate} className={navClass}>
-          <Link2Icon className="size-[18px] shrink-0" />
-          <span className={label}>{t('nav.paymentLink')}</span>
         </NavLink>
         <NavLink to="/app/faucet" onClick={onNavigate} className={navClass}>
           <DropletsIcon className="size-[18px] shrink-0" />
@@ -299,9 +301,13 @@ export function AppShell() {
 
   useScrollLock()
 
+  // The app scrolls through the root Lenis instance, which overrides window.scrollTo with its own
+  // target, so a new page has to reset Lenis itself or it opens at the previous page's offset.
+  const lenis = useLenis()
   useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [pathname])
+    if (lenis) lenis.scrollTo(0, { immediate: true })
+    else window.scrollTo(0, 0)
+  }, [pathname, lenis])
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
