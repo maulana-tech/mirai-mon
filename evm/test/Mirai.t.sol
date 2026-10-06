@@ -5,10 +5,10 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {Mirai, IYieldSource} from "../src/Mirai.sol";
+import {Mirai, IYieldSource, IBasket} from "../src/Mirai.sol";
 import {MiraiVault} from "../src/MiraiVault.sol";
 import {YieldStreamer} from "../src/YieldStreamer.sol";
-import {MarketVault, IPriceFeed} from "../src/MarketVault.sol";
+import {BasketVault, IPriceFeed} from "../src/BasketVault.sol";
 
 /// @dev 6-decimal permit token, shaped like AUSD.
 contract MockAUSD is ERC20Permit {
@@ -51,10 +51,16 @@ contract MiraiTest is Test {
     MiraiVault[3] vaults;
     YieldStreamer[3] streamers;
     MockAUSD ausd;
+    MockFeed usdc;
     MockFeed btc;
     MockFeed eth;
-    MarketVault market;
+    BasketVault basket;
     address curator = address(0xC0FFEE);
+    // basket asset ids
+    uint256 constant USDC = 0;
+    uint256 constant BTC = 1;
+    uint256 constant ETH = 2;
+    uint256 constant MEME = 3;
 
     uint256 alicePk = 0xA11CE;
     address alice;
@@ -66,8 +72,8 @@ contract MiraiTest is Test {
         alice = vm.addr(alicePk);
         ausd = new MockAUSD();
         uint16[3] memory apr = [uint16(400), 800, 1200];
-        IERC4626[4] memory vs;
-        IYieldSource[4] memory ys;
+        IERC4626[3] memory vs;
+        IYieldSource[3] memory ys;
         for (uint256 i; i < 3; ++i) {
             vaults[i] = new MiraiVault(ausd);
             // Unfunded streamers drip nothing, so tests that don't fund them see no streamed yield.
@@ -75,15 +81,27 @@ contract MiraiTest is Test {
             vs[i] = vaults[i];
             ys[i] = IYieldSource(address(streamers[i]));
         }
-        (btc, eth) = (new MockFeed(), new MockFeed());
+        (usdc, btc, eth) = (new MockFeed(), new MockFeed(), new MockFeed());
+        usdc.set(1e8);
         btc.set(80_000e8);
         eth.set(2500e8);
-        IPriceFeed[] memory feeds = new IPriceFeed[](2);
-        (feeds[0], feeds[1]) = (btc, eth);
-        market = new MarketVault(ausd, curator, feeds, _weights(5000, 5000));
-        vs[3] = market;
+        basket = new BasketVault(ausd, curator);
+        vm.startPrank(curator);
+        basket.addAsset("USDC", usdc, false);
+        basket.addAsset("BTC", btc, false);
+        basket.addAsset("ETH", eth, false);
+        basket.addAsset("CHOG", IPriceFeed(address(0)), true);
+        basket.setPrices(_ids(MEME), _prices(1e15)); // $0.001
+        basket.setSmartWeights(_w(1000, 4000, 5000, 0));
+        vm.stopPrank();
         vault = vaults[1];
-        mirai = new Mirai(vs, ys);
+        mirai = new Mirai(vs, ys, IBasket(address(basket)));
+        vm.prank(curator);
+        basket.initMirai(address(mirai));
+    }
+
+    function _shares(address user) internal view returns (uint256) {
+        return mirai.pocketsOf(user)[0].shares;
     }
 
     function _pay(address from, address to, uint256 amount) internal {
@@ -102,7 +120,7 @@ contract MiraiTest is Test {
         assertEq(acc.spend, 800 * ONE);
         assertEq(acc.savings, 200 * ONE);
         assertEq(ausd.balanceOf(address(vault)), 200 * ONE);
-        assertEq(vault.balanceOf(address(mirai)), acc.shares);
+        assertEq(vault.balanceOf(address(mirai)), _shares(bob));
         assertEq(ausd.balanceOf(address(mirai)), 800 * ONE);
     }
 
@@ -149,7 +167,7 @@ contract MiraiTest is Test {
         assertApproxEqAbs(savings, 220 * ONE, 1);
 
         vm.prank(bob);
-        mirai.withdrawSavings(bob, savings);
+        mirai.withdrawPocket(bob, 0, savings);
         assertEq(ausd.balanceOf(bob), savings);
         assertLe(mirai.accountOf(bob).savings, 1);
     }
@@ -174,7 +192,7 @@ contract MiraiTest is Test {
 
         Mirai.AccountView memory acc = mirai.accountOf(carol);
         assertEq(acc.spend, 10);
-        assertEq(acc.shares, 0);
+        assertEq(_shares(carol), 0);
     }
 
     function testWithdrawSpend() public {
@@ -194,18 +212,18 @@ contract MiraiTest is Test {
         _pay(alice, bob, 1000 * ONE);
         vm.prank(bob);
         vm.expectRevert(Mirai.InsufficientShares.selector);
-        mirai.withdrawSavings(bob, 201 * ONE);
+        mirai.withdrawPocket(bob, 0, 201 * ONE);
     }
 
     function testLockBlocksSavingsWithdraw() public {
         _pay(alice, bob, 1000 * ONE);
         uint64 until = uint64(block.timestamp + 1 days);
         vm.prank(bob);
-        mirai.setLock(bob, until);
+        mirai.setPocketLock(bob, 0, until);
 
         vm.prank(bob);
         vm.expectRevert(Mirai.LockActive.selector);
-        mirai.withdrawSavings(bob, ONE);
+        mirai.withdrawPocket(bob, 0, ONE);
 
         // Spend stays available while savings are locked.
         vm.prank(bob);
@@ -213,18 +231,18 @@ contract MiraiTest is Test {
 
         vm.warp(until);
         vm.prank(bob);
-        mirai.withdrawSavings(bob, ONE);
+        mirai.withdrawPocket(bob, 0, ONE);
         assertEq(ausd.balanceOf(bob), 2 * ONE);
     }
 
     function testLockCannotShrinkOrExceedMax() public {
         uint64 until = uint64(block.timestamp + 10 days);
         vm.startPrank(bob);
-        mirai.setLock(bob, until);
+        mirai.setPocketLock(bob, 0, until);
         vm.expectRevert(Mirai.LockCannotShrink.selector);
-        mirai.setLock(bob, until - 1);
+        mirai.setPocketLock(bob, 0, until - 1);
         vm.expectRevert(Mirai.LockTooLong.selector);
-        mirai.setLock(bob, uint64(block.timestamp + 5 * 365 days + 1));
+        mirai.setPocketLock(bob, 0, uint64(block.timestamp + 5 * 365 days + 1));
         vm.stopPrank();
     }
 
@@ -241,27 +259,6 @@ contract MiraiTest is Test {
         mirai.setSplit(bob, 0);
     }
 
-    function testGoalStoresOpaqueCiphertext() public {
-        bytes memory vault = bytes('{"version":1,"ciphertext":"abc"}');
-        vm.prank(bob);
-        mirai.setGoal(bob, vault);
-        assertEq(mirai.goalOf(bob), vault);
-
-        vm.prank(bob);
-        mirai.setGoal(bob, "");
-        assertEq(mirai.goalOf(bob).length, 0);
-    }
-
-    function testGoalGuards() public {
-        vm.prank(alice);
-        vm.expectRevert(Mirai.Unauthorized.selector);
-        mirai.setGoal(bob, "x");
-
-        vm.prank(bob);
-        vm.expectRevert(Mirai.GoalTooLarge.selector);
-        mirai.setGoal(bob, new bytes(1025));
-    }
-
     /// Someone donates to the empty vault first; later small savings must still get shares
     /// (otherwise the dust guard silently turns everyone's savings into spend).
     function testDonationToEmptyVaultCannotBlockSavings() public {
@@ -269,15 +266,15 @@ contract MiraiTest is Test {
         _pay(alice, bob, 10 * ONE);
 
         Mirai.AccountView memory acc = mirai.accountOf(bob);
-        assertGt(acc.shares, 0, "savings were turned into spend");
+        assertGt(_shares(bob), 0, "savings were turned into spend");
         assertEq(acc.spend, 8 * ONE);
         assertApproxEqRel(acc.savings, 2 * ONE, 0.01e18);
     }
 
     function testDefaultStrategyIsBalanced() public {
-        assertEq(mirai.accountOf(bob).strategy, 1);
+        assertEq(mirai.pocketsOf(bob)[0].strategy, 1);
         _pay(alice, bob, 100 * ONE);
-        assertEq(vaults[1].balanceOf(address(mirai)), mirai.accountOf(bob).shares);
+        assertEq(vaults[1].balanceOf(address(mirai)), _shares(bob));
     }
 
     function testStreamerPaysAprOverTime() public {
@@ -311,43 +308,43 @@ contract MiraiTest is Test {
     function testSetStrategyMigratesSavings() public {
         _pay(alice, bob, 1000 * ONE);
         vm.prank(bob);
-        mirai.setStrategy(bob, 2);
+        mirai.setPocketStrategy(bob, 0, 2);
 
         Mirai.AccountView memory acc = mirai.accountOf(bob);
-        assertEq(acc.strategy, 2);
+        assertEq(mirai.pocketsOf(bob)[0].strategy, 2);
         assertApproxEqAbs(acc.savings, 200 * ONE, 1);
         assertEq(vaults[1].balanceOf(address(mirai)), 0);
-        assertEq(vaults[2].balanceOf(address(mirai)), acc.shares);
+        assertEq(vaults[2].balanceOf(address(mirai)), _shares(bob));
 
         // New savings follow the new strategy, and withdrawals come out of it.
         _pay(alice, bob, 100 * ONE);
         assertApproxEqAbs(mirai.accountOf(bob).savings, 220 * ONE, 2);
         uint256 savings = mirai.accountOf(bob).savings;
         vm.prank(bob);
-        mirai.withdrawSavings(bob, savings);
+        mirai.withdrawPocket(bob, 0, savings);
         assertEq(ausd.balanceOf(bob), savings);
     }
 
     function testSetStrategyAllowedWhileLockedAndGuarded() public {
         _pay(alice, bob, 1000 * ONE);
         vm.startPrank(bob);
-        mirai.setLock(bob, uint64(block.timestamp + 30 days));
-        mirai.setStrategy(bob, 0);
-        assertEq(mirai.accountOf(bob).strategy, 0);
+        mirai.setPocketLock(bob, 0, uint64(block.timestamp + 30 days));
+        mirai.setPocketStrategy(bob, 0, 0);
+        assertEq(mirai.pocketsOf(bob)[0].strategy, 0);
         vm.expectRevert(Mirai.InvalidStrategy.selector);
-        mirai.setStrategy(bob, 4);
+        mirai.setPocketStrategy(bob, 0, 4);
         vm.stopPrank();
 
         vm.prank(alice);
         vm.expectRevert(Mirai.Unauthorized.selector);
-        mirai.setStrategy(bob, 1);
+        mirai.setPocketStrategy(bob, 0, 1);
     }
 
     function testBrokenYieldSourceNeverBlocksPayments() public {
-        IERC4626[4] memory vs = [IERC4626(vaults[0]), vaults[1], vaults[2], market];
+        IERC4626[3] memory vs = [IERC4626(vaults[0]), vaults[1], vaults[2]];
         IYieldSource broken = new RevertingYieldSource();
-        IYieldSource[4] memory ys = [broken, broken, broken, broken];
-        Mirai m = new Mirai(vs, ys);
+        IYieldSource[3] memory ys = [broken, broken, broken];
+        Mirai m = new Mirai(vs, ys, IBasket(address(basket)));
 
         ausd.mint(alice, 100 * ONE);
         vm.startPrank(alice);
@@ -357,106 +354,359 @@ contract MiraiTest is Test {
         assertApproxEqAbs(m.accountOf(bob).savings, 20 * ONE, 1);
     }
 
-    function _weights(uint16 a, uint16 b) internal pure returns (uint16[] memory w) {
-        w = new uint16[](2);
-        (w[0], w[1]) = (a, b);
+    function _w(uint16 a, uint16 b, uint16 c, uint16 d) internal pure returns (uint16[] memory w) {
+        w = new uint16[](4);
+        (w[0], w[1], w[2], w[3]) = (a, b, c, d);
     }
 
-    function _toMarket(address user) internal {
+    function _ids(uint256 id) internal pure returns (uint256[] memory ids) {
+        ids = new uint256[](1);
+        ids[0] = id;
+    }
+
+    function _prices(uint256 price) internal pure returns (uint256[] memory p) {
+        p = new uint256[](1);
+        p[0] = price;
+    }
+
+    /// the default pocket switches to an invest basket
+    function _toBasket(address user) internal {
         vm.prank(user);
-        mirai.setStrategy(user, 3);
+        mirai.setPocketStrategy(user, 0, 3);
     }
 
-    function testMarketSavingsFollowPrices() public {
-        _toMarket(bob);
-        _pay(alice, bob, 1000 * ONE); // 200 saved into the basket
-        assertApproxEqAbs(mirai.accountOf(bob).savings, 200 * ONE, 1);
-
-        // ETH (half the basket) +20%: savings +10%, capped by the vault's AUSD until a reserve is added.
-        eth.set(3000e8);
-        assertApproxEqAbs(mirai.accountOf(bob).savings, 200 * ONE, 1);
-        ausd.mint(address(market), 100 * ONE); // operator reserve; does not mint value by itself
-        assertApproxEqAbs(mirai.accountOf(bob).savings, 220 * ONE, 2);
-
-        // BTC halves: the loss stays in the vault.
-        btc.set(40_000e8);
-        assertApproxEqAbs(mirai.accountOf(bob).savings, 170 * ONE, 2);
-
-        vm.prank(bob);
-        mirai.withdrawSavings(bob, 170 * ONE - 2);
-        assertEq(ausd.balanceOf(bob), 170 * ONE - 2);
-        assertLe(market.basketValue(), 2);
-    }
-
-    function testMarketReserveDonationDoesNotMovePrice() public {
-        _toMarket(bob);
-        _pay(alice, bob, 1000 * ONE);
-        uint256 before = market.convertToAssets(1e12);
-        ausd.mint(address(market), 1_000_000 * ONE);
-        assertEq(market.convertToAssets(1e12), before);
-    }
-
-    function testMarketRebalanceKeepsValueAndIsCuratorOnly() public {
-        _toMarket(bob);
-        _pay(alice, bob, 1000 * ONE);
-        uint256 value = market.basketValue();
-
-        vm.expectRevert(MarketVault.Unauthorized.selector);
-        market.rebalance(_weights(2000, 8000));
-
-        vm.prank(curator);
-        market.rebalance(_weights(2000, 8000));
-        assertApproxEqAbs(market.basketValue(), value, 1);
-        (, uint16[] memory w, uint256[] memory units,) = market.basket();
-        assertEq(w[1], 8000);
-        assertApproxEqRel(units[1], 160e18 / 2500, 1e12); // 80% of $200 in ETH
-
-        vm.prank(curator);
-        vm.expectRevert(MarketVault.InvalidWeights.selector);
-        market.rebalance(_weights(2000, 7000));
-    }
-
-    function testSwitchBetweenYieldAndMarket() public {
-        _pay(alice, bob, 1000 * ONE);
-        _toMarket(bob);
+    function testBasketFollowsSmartMoney() public {
+        _toBasket(bob);
+        _pay(alice, bob, 1000 * ONE); // 200 saved: 10% USDC, 40% BTC, 50% ETH
         assertApproxEqAbs(mirai.accountOf(bob).savings, 200 * ONE, 2);
+        uint256[] memory u = basket.unitsOf(bob, 0);
+        assertApproxEqRel(u[BTC], 80e18 / 80_000, 1e12);
+        assertApproxEqRel(u[ETH], 100e18 / 2500, 1e12);
+        assertEq(u[MEME], 0);
+        assertEq(_shares(bob), 0); // the basket holds it, not vault shares
+    }
+
+    function testAllInMemecoinIsAllowed() public {
+        _toBasket(bob);
         vm.prank(bob);
-        mirai.setStrategy(bob, 1);
-        assertApproxEqAbs(mirai.accountOf(bob).savings, 200 * ONE, 3);
-        assertLe(market.basketValue(), 2);
+        basket.setWeights(bob, 0, _w(0, 0, 0, 10_000)); // 100% CHOG: the app warns, the contract allows
+        _pay(alice, bob, 50 * ONE); // 10 saved
+        assertApproxEqAbs(mirai.accountOf(bob).savings, 10 * ONE, 1);
+
+        ausd.mint(address(basket), 100 * ONE); // operator reserve backs gains
+        vm.prank(curator);
+        basket.setPrices(_ids(MEME), _prices(3e15)); // CHOG triples
+        assertApproxEqAbs(mirai.accountOf(bob).savings, 30 * ONE, 1);
+
+        vm.prank(curator);
+        basket.setPrices(_ids(MEME), _prices(1e14)); // then loses 97%
+        assertApproxEqAbs(mirai.accountOf(bob).savings, 1 * ONE, 1);
+    }
+
+    function testCustomMixIsRebalancedAtTodaysPrices() public {
+        _toBasket(bob);
+        _pay(alice, bob, 1000 * ONE);
+        uint256 before = mirai.accountOf(bob).savings;
+        vm.prank(bob);
+        basket.setWeights(bob, 0, _w(1000, 7000, 0, 2000)); // BTC 70, meme 20, stable 10
+        assertApproxEqAbs(mirai.accountOf(bob).savings, before, 3);
+        uint256[] memory u = basket.unitsOf(bob, 0);
+        assertEq(u[ETH], 0);
+        assertApproxEqRel(u[BTC], 140e18 / 80_000, 1e12);
+        assertTrue(basket.holder(bob, 0).custom);
+
+        vm.prank(bob);
+        basket.setWeights(bob, 0, new uint16[](0)); // back to following Smart Money
+        assertFalse(basket.holder(bob, 0).custom);
+        assertEq(basket.weightsOf(bob, 0)[ETH], 5000);
+    }
+
+    function testFollowersMoveToNewSmartWeights() public {
+        _toBasket(bob);
+        _toBasket(alice);
+        _pay(alice, bob, 1000 * ONE);
+        vm.prank(alice);
+        basket.setWeights(alice, 0, _w(10_000, 0, 0, 0)); // alice picks her own mix
+        _pay(bob, alice, 1000 * ONE);
+
+        vm.prank(curator);
+        basket.setSmartWeights(_w(0, 2000, 6000, 2000));
+        uint256 value = mirai.accountOf(bob).savings;
+        basket.sync(bob, 0); // anyone can move a follower to the new weights
+        assertApproxEqAbs(mirai.accountOf(bob).savings, value, 3);
+        assertGt(basket.unitsOf(bob, 0)[MEME], 0);
+        assertEq(basket.weightsOf(alice, 0)[USDC], 10_000); // custom mixes never follow
+        assertEq(basket.unitsOf(alice, 0)[MEME], 0);
+    }
+
+    function testBasketWithdrawPartialThenAll() public {
+        _toBasket(bob);
+        _pay(alice, bob, 1000 * ONE);
+        vm.startPrank(bob);
+        mirai.withdrawPocket(bob, 0, 50 * ONE);
+        assertEq(ausd.balanceOf(bob), 50 * ONE);
+        assertApproxEqAbs(mirai.accountOf(bob).savings, 150 * ONE, 3);
+        vm.expectRevert(Mirai.InsufficientShares.selector);
+        mirai.withdrawPocket(bob, 0, 151 * ONE);
+        uint256 out = mirai.withdrawAllPocket(bob, 0);
+        vm.stopPrank();
+        assertApproxEqAbs(out, 150 * ONE, 3);
+        assertEq(basket.valueOf(bob, 0), 0);
+        vm.prank(bob);
+        vm.expectRevert(Mirai.EmptyWithdrawal.selector);
+        mirai.withdrawAllPocket(bob, 0);
     }
 
     function testWithdrawAllSavingsSurvivesAPriceDrop() public {
-        _toMarket(bob);
+        _toBasket(bob);
         _pay(alice, bob, 1000 * ONE);
         uint256 shown = mirai.accountOf(bob).savings; // what the app displayed
         eth.set(2400e8); // the market moves before the transaction lands
 
         vm.prank(bob);
         vm.expectRevert(Mirai.InsufficientShares.selector);
-        mirai.withdrawSavings(bob, shown);
+        mirai.withdrawPocket(bob, 0, shown);
 
         vm.prank(bob);
-        uint256 out = mirai.withdrawAllSavings(bob);
+        uint256 out = mirai.withdrawAllPocket(bob, 0);
         assertLt(out, shown);
         assertEq(ausd.balanceOf(bob), out);
-        assertEq(mirai.accountOf(bob).shares, 0);
     }
 
     function testWithdrawAllSavingsGuards() public {
         vm.prank(bob);
         vm.expectRevert(Mirai.EmptyWithdrawal.selector);
-        mirai.withdrawAllSavings(bob);
+        mirai.withdrawAllPocket(bob, 0);
 
         _pay(alice, bob, 1000 * ONE);
         vm.prank(alice);
         vm.expectRevert(Mirai.Unauthorized.selector);
-        mirai.withdrawAllSavings(bob);
+        mirai.withdrawAllPocket(bob, 0);
 
         vm.startPrank(bob);
-        mirai.setLock(bob, uint64(block.timestamp + 1 days));
+        mirai.setPocketLock(bob, 0, uint64(block.timestamp + 1 days));
         vm.expectRevert(Mirai.LockActive.selector);
-        mirai.withdrawAllSavings(bob);
+        mirai.withdrawAllPocket(bob, 0);
+        vm.stopPrank();
+    }
+
+    function testBasketGuards() public {
+        vm.expectRevert(BasketVault.Unauthorized.selector);
+        basket.deposit(bob, 0, 1); // only Mirai moves money in
+        vm.expectRevert(BasketVault.Unauthorized.selector);
+        basket.setPrices(_ids(MEME), _prices(1)); // only the curator prices coins
+        vm.expectRevert(BasketVault.Unauthorized.selector);
+        basket.setWeights(bob, 0, _w(10_000, 0, 0, 0)); // only bob picks bob's mix
+        vm.prank(curator);
+        vm.expectRevert(BasketVault.AlreadyInitialized.selector);
+        basket.initMirai(address(1));
+
+        vm.startPrank(bob);
+        vm.expectRevert(BasketVault.InvalidWeights.selector);
+        basket.setWeights(bob, 0, _w(5000, 0, 0, 0)); // must sum to 100%
+        vm.stopPrank();
+        vm.prank(curator);
+        vm.expectRevert(BasketVault.InvalidPrice.selector);
+        basket.setPrices(_ids(BTC), _prices(1)); // Chainlink assets can't be overridden
+    }
+
+    function testNoSmartWeightsRefusesDepositsInsteadOfLosingThem() public {
+        BasketVault fresh = new BasketVault(ausd, curator);
+        vm.prank(curator);
+        fresh.addAsset("USDC", usdc, false);
+        IERC4626[3] memory vs = [IERC4626(vaults[0]), vaults[1], vaults[2]];
+        IYieldSource[3] memory ys;
+        Mirai m = new Mirai(vs, ys, IBasket(address(fresh)));
+        vm.prank(curator);
+        fresh.initMirai(address(m));
+        vm.prank(bob);
+        m.setPocketStrategy(bob, 0, 3);
+
+        ausd.mint(alice, 100 * ONE);
+        vm.startPrank(alice);
+        ausd.approve(address(m), 100 * ONE);
+        vm.expectRevert(BasketVault.InvalidWeights.selector);
+        m.pay(alice, bob, 100 * ONE);
+        vm.stopPrank();
+    }
+
+    // ─── Pockets ─────────────────────────────────────────────────────────────
+
+    function _shares2(uint16 a, uint16 b, uint16 c) internal pure returns (uint16[] memory bps) {
+        bps = new uint16[](3);
+        (bps[0], bps[1], bps[2]) = (a, b, c);
+    }
+
+    /// bob: pocket 0 (default, balanced yield), 1 = "PS5" growth yield, 2 = "Car" invest basket
+    function _threePockets() internal {
+        vm.startPrank(bob);
+        assertEq(mirai.createPocket(bob, 2, "ps5"), 1);
+        assertEq(mirai.createPocket(bob, 3, "car"), 2);
+        mirai.setPocketShares(bob, _shares2(5000, 3000, 2000));
+        vm.stopPrank();
+    }
+
+    function testFreshAccountHasOneDefaultPocket() public view {
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertEq(ps.length, 1);
+        assertEq(ps[0].shareBps, 10_000);
+        assertEq(ps[0].strategy, 1);
+        assertTrue(ps[0].open);
+    }
+
+    function testPaymentSpreadsOverPocketsAndStrategies() public {
+        _threePockets();
+        _pay(alice, bob, 1000 * ONE); // 200 saved: 100 balanced, 60 growth, 40 basket
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertApproxEqAbs(ps[0].value, 100 * ONE, 1);
+        assertApproxEqAbs(ps[1].value, 60 * ONE, 1);
+        assertApproxEqAbs(ps[2].value, 40 * ONE, 2);
+        assertEq(ps[2].shares, 0); // the basket holds pocket 2, not a vault
+        assertEq(vaults[2].balanceOf(address(mirai)), ps[1].shares);
+        assertApproxEqAbs(mirai.accountOf(bob).savings, 200 * ONE, 3);
+        assertEq(mirai.accountOf(bob).spend, 800 * ONE);
+        assertEq(ps[1].meta, bytes("ps5")); // opaque bytes (the app stores passkey-encrypted JSON)
+    }
+
+    function testRoundingRemainderGoesToTheLastFundedPocket() public {
+        vm.startPrank(bob);
+        mirai.createPocket(bob, 1, "");
+        mirai.createPocket(bob, 1, "");
+        mirai.setPocketShares(bob, _shares2(3333, 3333, 3334));
+        vm.stopPrank();
+        _pay(alice, bob, 50); // 10 units saved
+        Mirai.AccountView memory acc = mirai.accountOf(bob);
+        assertEq(acc.spend + acc.savings, 50); // nothing lost to rounding
+    }
+
+    function testPocketSharesMustCoverEverything() public {
+        _threePockets();
+        vm.startPrank(bob);
+        vm.expectRevert(Mirai.InvalidShares.selector);
+        mirai.setPocketShares(bob, _shares2(5000, 3000, 1000)); // 90%
+        uint16[] memory two = new uint16[](2);
+        (two[0], two[1]) = (5000, 5000);
+        vm.expectRevert(Mirai.InvalidShares.selector);
+        mirai.setPocketShares(bob, two); // one per slot
+        vm.stopPrank();
+    }
+
+    function testWithdrawFromOnePocketOnly() public {
+        _threePockets();
+        _pay(alice, bob, 1000 * ONE);
+        vm.startPrank(bob);
+        mirai.withdrawPocket(bob, 1, 20 * ONE); // from "PS5"
+        vm.expectRevert(Mirai.InsufficientShares.selector);
+        mirai.withdrawPocket(bob, 1, 41 * ONE);
+        uint256 out = mirai.withdrawAllPocket(bob, 2); // the whole "Car" basket
+        vm.stopPrank();
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertApproxEqAbs(ps[1].value, 40 * ONE, 1);
+        assertApproxEqAbs(out, 40 * ONE, 2);
+        assertEq(ps[2].value, 0);
+        assertApproxEqAbs(ps[0].value, 100 * ONE, 1); // untouched
+        assertApproxEqAbs(ausd.balanceOf(bob), 60 * ONE, 2);
+    }
+
+    function testEachPocketHasItsOwnLock() public {
+        _threePockets();
+        _pay(alice, bob, 1000 * ONE);
+        vm.startPrank(bob);
+        mirai.setPocketLock(bob, 1, uint64(block.timestamp + 30 days)); // lock "PS5"
+        vm.expectRevert(Mirai.LockActive.selector);
+        mirai.withdrawPocket(bob, 1, ONE);
+        mirai.withdrawPocket(bob, 0, ONE); // other pockets stay free
+        vm.expectRevert(Mirai.LockActive.selector);
+        mirai.closePocket(bob, 1, 0);
+        mirai.setPocketStrategy(bob, 1, 0); // moving strategy is fine: money stays in the pocket
+        vm.stopPrank();
+    }
+
+    function testPocketStrategySwitchMovesItsMoney() public {
+        _threePockets();
+        _pay(alice, bob, 1000 * ONE);
+        vm.prank(bob);
+        mirai.setPocketStrategy(bob, 1, 3); // "PS5" from growth yield to an invest basket
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertEq(ps[1].strategy, 3);
+        assertEq(ps[1].shares, 0);
+        assertApproxEqAbs(ps[1].value, 60 * ONE, 2);
+        assertApproxEqAbs(basket.valueOf(bob, 2), 40 * ONE, 2); // the other basket is separate
+    }
+
+    function testClosingAPocketMovesMoneyAndShare() public {
+        _threePockets();
+        _pay(alice, bob, 1000 * ONE);
+        vm.prank(bob);
+        mirai.closePocket(bob, 2, 0); // "Car" into the default pocket
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertFalse(ps[2].open);
+        assertEq(ps[2].shareBps, 0);
+        assertEq(ps[2].meta.length, 0);
+        assertEq(ps[0].shareBps, 7000);
+        assertApproxEqAbs(ps[0].value, 140 * ONE, 3);
+        vm.prank(bob);
+        vm.expectRevert(Mirai.InvalidPocket.selector);
+        mirai.withdrawPocket(bob, 2, ONE);
+
+        vm.prank(bob);
+        assertEq(mirai.createPocket(bob, 0, "laptop"), 2); // the closed slot is reused
+    }
+
+    function testAtMostTenPockets() public {
+        vm.startPrank(bob);
+        for (uint256 i = 1; i < 10; ++i) {
+            mirai.createPocket(bob, 1, "");
+        }
+        vm.expectRevert(Mirai.TooManyPockets.selector);
+        mirai.createPocket(bob, 1, "");
+        vm.stopPrank();
+        assertEq(mirai.accountOf(bob).pocketCount, 10);
+    }
+
+    function testPocketGuards() public {
+        vm.prank(alice);
+        vm.expectRevert(Mirai.Unauthorized.selector);
+        mirai.createPocket(bob, 1, "");
+        vm.startPrank(bob);
+        vm.expectRevert(Mirai.InvalidStrategy.selector);
+        mirai.createPocket(bob, 4, "");
+        vm.expectRevert(Mirai.GoalTooLarge.selector);
+        mirai.createPocket(bob, 1, new bytes(1025));
+        vm.expectRevert(Mirai.InvalidPocket.selector);
+        mirai.withdrawPocket(bob, 5, ONE);
+        vm.expectRevert(Mirai.InvalidPocket.selector);
+        mirai.closePocket(bob, 0, 0);
+        mirai.setPocketMeta(bob, 0, "renamed");
+        vm.stopPrank();
+        assertEq(mirai.pocketsOf(bob)[0].meta, bytes("renamed"));
+    }
+
+    function testFullPaymentToLastPocketWhenOthersAreZero() public {
+        vm.startPrank(bob);
+        mirai.createPocket(bob, 3, "car");
+        uint16[] memory bps = new uint16[](2);
+        (bps[0], bps[1]) = (0, 10_000);
+        mirai.setPocketShares(bob, bps);
+        vm.stopPrank();
+        _pay(alice, bob, 1000 * ONE);
+        Mirai.PocketView[] memory ps = mirai.pocketsOf(bob);
+        assertEq(ps[0].value, 0);
+        assertApproxEqAbs(ps[1].value, 200 * ONE, 2);
+    }
+
+    function testPaymentEmitsPerPocketFunding() public {
+        _threePockets();
+        ausd.mint(alice, 1000 * ONE);
+        vm.startPrank(alice);
+        ausd.approve(address(mirai), 1000 * ONE);
+        vm.expectEmit(true, true, false, true);
+        emit Mirai.PocketFunded(bob, 0, 100 * ONE);
+        vm.expectEmit(true, true, false, true);
+        emit Mirai.PocketFunded(bob, 1, 60 * ONE);
+        vm.expectEmit(true, true, false, true);
+        emit Mirai.PocketFunded(bob, 2, 40 * ONE);
+        mirai.pay(alice, bob, 1000 * ONE);
         vm.stopPrank();
     }
 }
