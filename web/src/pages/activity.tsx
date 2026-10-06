@@ -13,7 +13,7 @@ type FilterKey = 'all' | 'payments' | 'withdrawals' | 'changes'
 
 const FILTERS: { key: FilterKey; label: MessageKey; kinds: ActivityItem['kind'][] | null }[] = [
   { key: 'all', label: 'activity.filterAll', kinds: null },
-  { key: 'payments', label: 'activity.filterPayments', kinds: ['pay'] },
+  { key: 'payments', label: 'activity.filterPayments', kinds: ['pay', 'sent'] },
   { key: 'withdrawals', label: 'activity.filterWithdrawals', kinds: ['wd_spend', 'wd_save'] },
   { key: 'changes', label: 'activity.filterChanges', kinds: ['split', 'lock', 'strategy'] },
 ]
