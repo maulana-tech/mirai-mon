@@ -1,19 +1,8 @@
 import { Interface, type Log } from 'ethers'
 import { CONTRACT_ID, INDEXER_URL, readProvider } from '@/lib/config'
 
-export type ActivityItem = {
-  id: string
-  kind: 'pay' | 'wd_spend' | 'wd_save' | 'split' | 'lock' | 'strategy'
-  at: Date
-  txHash: string
-  from?: string
-  amount?: bigint
-  saved?: bigint
-  shares?: bigint
-  bps?: number
-  until?: bigint
-  strategy?: number
-}
+export type { ActivityItem } from '@/lib/types'
+import type { ActivityItem } from '@/lib/types'
 
 const iface = new Interface([
   'event PaymentRouted(address indexed from,address indexed to,uint256 amount,uint256 spendAmount,uint256 savingsAmount,uint256 shares)',
@@ -35,6 +24,7 @@ type IndexedActivity = {
   timestamp: string
   txHash: string
   from: string | null
+  to: string | null
   amount: string | null
   saved: string | null
   shares: string | null
@@ -45,7 +35,7 @@ type IndexedActivity = {
 
 const ACTIVITY_QUERY = `query Activity($user: String!) {
   Activity(where: { user: { _eq: $user } }, order_by: { timestamp: desc }, limit: 200) {
-    id kind timestamp txHash from amount saved shares bps until strategy
+    id kind timestamp txHash from to amount saved shares bps until strategy
   }
 }`
 
@@ -66,6 +56,7 @@ async function fetchIndexedActivity(user: string): Promise<ActivityItem[]> {
     at: new Date(Number(a.timestamp) * 1000),
     txHash: a.txHash,
     from: a.from ?? undefined,
+    to: a.to ?? undefined,
     amount: big(a.amount),
     saved: big(a.saved),
     shares: big(a.shares),
@@ -116,9 +107,15 @@ function decodeLog(log: Log, user: string): DecodedLog | null {
   const parsed = iface.parseLog(log)
   if (!parsed) return null
   const args = parsed.args
-  const owner = String(parsed.name === 'PaymentRouted' ? args.to : args.user).toLowerCase()
-  if (owner !== user) return null
   const base = { id: `${log.transactionHash}-${log.index}`, txHash: log.transactionHash, blockNumber: log.blockNumber }
+  if (parsed.name === 'PaymentRouted') {
+    const to = String(args.to).toLowerCase()
+    // Mirrors the indexer: the recipient gets "pay", the payer (if someone else) gets "sent".
+    if (to !== user) {
+      if (String(args.from).toLowerCase() !== user) return null
+      return { ...base, id: `${base.id}-sent`, kind: 'sent', to, amount: BigInt(args.amount) }
+    }
+  } else if (String(args.user).toLowerCase() !== user) return null
   switch (parsed.name) {
     case 'PaymentRouted':
       return {
