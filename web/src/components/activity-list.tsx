@@ -1,8 +1,10 @@
 import {
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
+  ChartCandlestickIcon,
   ExternalLinkIcon,
   LockIcon,
+  PiggyBankIcon,
   SlidersHorizontalIcon,
   TrendingUpIcon,
 } from 'lucide-react'
@@ -26,6 +28,9 @@ const ICONS: Record<ActivityItem['kind'], typeof LockIcon> = {
   split: SlidersHorizontalIcon,
   lock: LockIcon,
   strategy: TrendingUpIcon,
+  basket: ChartCandlestickIcon,
+  pocket_new: PiggyBankIcon,
+  pocket_close: PiggyBankIcon,
 }
 
 // pay/wd_spend/wd_save all move real AUSD, so they share the brand cobalt; split/lock/strategy
@@ -39,6 +44,9 @@ const KIND_TINT: Record<ActivityItem['kind'], { bg: string; fg: string }> = {
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   lock: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   strategy: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  basket: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  pocket_new: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  pocket_close: { bg: 'bg-accent', fg: 'text-accent-foreground' },
 }
 
 // Same kind colors, but solid instead of a wash: the corner badge on token rows is only
@@ -51,6 +59,9 @@ const KIND_TINT_SOLID: Record<ActivityItem['kind'], { bg: string; fg: string }> 
   split: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   lock: { bg: 'bg-accent', fg: 'text-accent-foreground' },
   strategy: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  basket: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  pocket_new: { bg: 'bg-accent', fg: 'text-accent-foreground' },
+  pocket_close: { bg: 'bg-accent', fg: 'text-accent-foreground' },
 }
 
 type ActivityListProps = {
@@ -75,6 +86,8 @@ export function ActivityList({ items, loading }: ActivityListProps) {
         return t('activity.pay', { amount: money(item.amount), saved: money(item.saved) })
       case 'sent':
         return t('activity.sent', { amount: money(item.amount) })
+      case 'basket':
+        return item.custom ? t('activity.basketCustom') : t('activity.basketSmart')
       case 'wd_spend':
         return t('activity.wdSpend', { amount: money(item.amount) })
       case 'wd_save':
@@ -85,6 +98,10 @@ export function ActivityList({ items, loading }: ActivityListProps) {
         return t('activity.lock', { date: formatDate(item.until ?? 0n, locale) })
       case 'strategy':
         return t('activity.strategy', { name: t(STRATEGIES[item.strategy ?? 1]?.name ?? 'strategy.balanced') })
+      case 'pocket_new':
+        return t('activity.pocketNew', { name: t(STRATEGIES[item.strategy ?? 1]?.name ?? 'strategy.balanced') })
+      case 'pocket_close':
+        return t('activity.pocketClose')
     }
   }
 
