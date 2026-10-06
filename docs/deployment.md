@@ -32,17 +32,17 @@ Project root `web/`. Environment variables:
 | `VITE_MIRAI_ADDRESS` | client | Mirai address |
 | `VITE_INDEXER_URL` | client | Envio GraphQL endpoint (optional) |
 | `VITE_MONAD_RPC_URL` | client | optional RPC override |
-| `DRIP_PRIVATE_KEY` | server only | testnet key holding MON (≥ a few MON) for onboarding; must be the MarketVault `curator` |
-| `NANSEN_API_KEY` | server only | Nansen API key for `/api/market` (Smart Money weights); without it the basket keeps its on-chain weights |
+| `DRIP_PRIVATE_KEY` | server only | testnet key holding MON (≥ a few MON) for onboarding; must be the BasketVault `curator` (the deployer) |
+| `NANSEN_API_KEY` | server only | Nansen API key for `/api/market` (Smart Money weights); without it followers keep the last on-chain weights |
 
 `vercel.json` rewrites everything except `api/`, `assets/` and `tokens/` to `index.html`. Passkeys are bound to the hostname (the WebAuthn RP ID), so accounts created on a preview URL do not carry over to the production domain.
 
-## Smart Money reserve
+## Invest basket reserve and prices
 
-`MarketVault` pays gains above deposits from the AUSD it holds. Top the reserve up by sending AUSD straight to the vault (this never changes its share price):
+`BasketVault` pays gains above deposits from the AUSD it holds; top the reserve up by sending AUSD to it. Right after a deploy, request `/api/market` once: it pushes MON/memecoin prices and the first Nansen-based Smart Money weights (until then only USDC/BTC/ETH carry weight).
 
 ```bash
-cast send 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "transfer(address,uint256)" <MarketVault> 500000000 \
+cast send 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "transfer(address,uint256)" <BasketVault> 500000000 \
   --rpc-url https://testnet-rpc.monad.xyz --private-key $DEPLOYER_PRIVATE_KEY   # 500 AUSD
 ```
 
