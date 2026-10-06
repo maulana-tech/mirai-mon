@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture
 
 **Contracts (`evm/src/`)**
-- `Mirai.sol` (`Mirai`) holds spend balances in AUSD and savings as shares of the saver's strategy vault (three yield `MiraiVault`s, OZ ERC-4626 with a 10^6 virtual-share offset, plus the Smart Money `MarketVault`, a BTC/ETH basket priced by Chainlink and weighted from Nansen via `web/api/market.ts`). `YieldStreamer` pays each vault a fixed APR on testnet; `Mirai` drips it before every deposit/withdrawal. `setStrategy` migrates savings between vaults. `withdrawAllSavings` redeems every share (used for "withdraw all"). `pay`/`payWithPermit(from, to, amount, …)` pull AUSD from the payer, deposit `amount × splitBps` into the vault for the recipient and credit the rest to `spend`, all in one transaction.
+- `Mirai.sol` (`Mirai`) holds spend balances in AUSD and savings either as shares of a yield vault (strategies 0-2: three `MiraiVault`s, OZ ERC-4626 with a 10^6 virtual-share offset) or in the saver's own coin basket in `BasketVault` (strategy 3: Follow Smart Money weights set daily from Nansen via `web/api/market.ts`, a preset, or a custom mix). `YieldStreamer` pays each yield vault a fixed APR on testnet; `Mirai` drips it before every deposit/withdrawal. `setStrategy` migrates savings between strategies. `withdrawAllSavings` redeems everything (used for "withdraw all"). `pay`/`payWithPermit(from, to, amount, …)` pull AUSD from the payer, put `amount × splitBps` into the recipient's strategy and credit the rest to `spend`, all in one transaction.
 - Every user-scoped function takes the user explicitly and requires `msg.sender == user`.
 - `lockUntil` blocks savings withdrawals only.
 
