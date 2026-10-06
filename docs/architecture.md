@@ -9,16 +9,16 @@ Browser (React)                                   Monad testnet
 │        Mera signing session  │  payWithPermit   │  ├─ spend balance (AUSD)   │
 │        MeraSigner (ethers)   │ ───────────────> │  └─ vault shares ──┐       │
 │ reads: JsonRpcProvider       │                  │ 3× MiraiVault (yield)     <┤│
-│                              │                  │ MarketVault (Smart Money) <┘│
+│                              │                  │ BasketVault (invest)      <┘│
 │                              │                  │ 3× YieldStreamer (testnet)  │
-│                              │                  │ Chainlink BTC/ETH feeds     │
+│                              │                  │ Chainlink feeds + curator   │
 │ history: Envio GraphQL       │ <── indexer ──── │ AUSD (Agora, permit)       │
 └──────────────┬───────────────┘                  └────────────────────────────┘
                │ POST /api/onboard (new accounts)
                ▼
         Vercel function: MON for gas + test AUSD from a drip reserve
 
-        GET /api/market: Nansen smart-money holdings (Monad) → basket weights → MarketVault.rebalance
+        GET /api/market: DexScreener → BasketVault.setPrices; Nansen (Monad) → setSmartWeights
 ```
 
 ## Contracts (`evm/src`)
@@ -40,13 +40,13 @@ Per-user `Account { splitBps, spend, shares, lockUntil, strategy }`; `accountOf`
 
 Every function that acts for a user takes it explicitly and requires `msg.sender` to match (`Unauthorized()`).
 
-### Strategies: `MiraiVault` + `YieldStreamer`, and `MarketVault`
+### Strategies: `MiraiVault` + `YieldStreamer`, and `BasketVault`
 
-Four strategies: 0 conservative, 1 balanced (default), 2 growth earn yield; 3 Smart Money invests. The three yield strategies are each a plain OpenZeppelin ERC-4626 vault over AUSD with a 10^6 virtual-share offset, so a donation into an empty vault cannot round later deposits to zero shares. `setStrategy` redeems the saver's shares from the old vault and deposits the assets into the new one.
+Four strategies: 0 conservative, 1 balanced (default), 2 growth earn yield; 3 invests in a coin basket. The three yield strategies are each a plain OpenZeppelin ERC-4626 vault over AUSD with a 10^6 virtual-share offset, so a donation into an empty vault cannot round later deposits to zero shares. `setStrategy` redeems the saver's shares from the old vault and deposits the assets into the new one.
 
 Yield is AUSD transferred to a vault without minting shares. On testnet a `YieldStreamer` per vault pays a fixed APR (4% / 8% / 12%, mirroring Aave V3, Curvance and Upshift earnAUSD on Monad mainnet) from an AUSD reserve, as simple interest on the vault's assets since the last drip, capped by the reserve. `Mirai` drips the strategy's streamer before every deposit and withdrawal, inside `try/catch`, so share prices are current and a failing streamer never blocks a payment. On mainnet, the constructor would take the real markets' ERC-4626 vaults and no streamers.
 
-**Smart Money (`MarketVault`)** is an ERC-4626 vault whose value is a BTC/ETH basket priced by Chainlink push feeds on Monad, so it can go down. A deposit "buys" basket units at the oracle price (testnet has no AUSD liquidity for these coins; on mainnet `_buy`/`_sell` become Kuru swaps). `totalAssets = min(basket value, AUSD held)`: gains above deposits are paid from a reserve the operator tops up, losses stay in the vault, and AUSD sent to the vault does not move the share price. Only the `curator` (the drip wallet) can `rebalance(weights)`, which re-weights at current prices without changing value. `web/api/market.ts` sets the weights once a day from Nansen's `smart-money/holdings` on Monad (BTC-like vs ETH-like tokens, 20% floor each, rebalance on >3% drift). No Pyth: Hermes needs a paid key; Chainlink has no MON/USD on testnet.
+**Invest (`BasketVault`)** keeps a basket per saver: units of each coin, bought at the price on deposit and sold pro rata on withdrawal (`withdrawAll` sells everything). USDC, BTC, ETH and LINK are priced by Chainlink push feeds on Monad; MON and the memecoins CHOG, NADS, MONCAT, EMO by prices the `curator` pushes (`setPrices`, from DexScreener). A saver either follows the curator's Smart Money weights (`setSmartWeights`, set daily from Nansen holdings + 24h DEX net buying with guard rails; followers re-weight lazily at their next action or via `sync`) or sets their own (`setWeights`, any split that sums to 100%, memecoins included). Re-weighting keeps value. Testnet has no AUSD liquidity for these coins, so buys are bookkeeping at the price and the vault's AUSD (deposits plus an operator reserve) backs withdrawals; on mainnet they become Kuru swaps. Deposits revert while no weights are set, so money is never swallowed. `Mirai` holds no shares for this strategy: `accountOf().savings` reads `basket.valueOf(user)`.
 
 ### Custom errors → UI
 
