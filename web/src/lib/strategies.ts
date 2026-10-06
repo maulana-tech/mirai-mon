@@ -4,14 +4,14 @@ import type { StrategyId } from '@/lib/types'
 /**
  * Display data for the savings strategies (order matches Mirai.sol). On testnet each yield vault's
  * yield is streamed at a fixed APR that mirrors the live Monad AUSD market named in `mainnet`;
- * on mainnet the strategy would point straight at that market's ERC-4626 vault. Smart Money is a
- * BTC/ETH basket priced by Chainlink and weighted by Nansen smart-money holdings; it has no APR.
+ * on mainnet the strategy would point straight at that market's ERC-4626 vault. Invest is a basket of
+ * coins per saver (Follow Smart Money, a preset, or their own mix); it has no APR and can go down.
  */
 export const STRATEGIES: { id: StrategyId; name: MessageKey; risk: MessageKey; mainnet: string }[] = [
   { id: 0, name: 'strategy.conservative', risk: 'strategy.riskLow', mainnet: 'Aave V3 · AUSD' },
   { id: 1, name: 'strategy.balanced', risk: 'strategy.riskMedium', mainnet: 'Curvance · AUSD' },
   { id: 2, name: 'strategy.growth', risk: 'strategy.riskHigher', mainnet: 'Upshift · earnAUSD' },
-  { id: 3, name: 'strategy.smartMoney', risk: 'strategy.riskMarket', mainnet: 'Kuru · BTC / ETH' },
+  { id: 3, name: 'strategy.invest', risk: 'strategy.riskMarket', mainnet: 'Kuru' },
 ]
 
 export const MARKET_STRATEGY: StrategyId = 3
