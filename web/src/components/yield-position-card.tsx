@@ -1,13 +1,13 @@
-import { SavingsWaveChart } from '@/components/savings-wave-chart'
+import { Bar, BarChart, BarXAxis, ChartTooltip, Grid, chartCssVars } from '@/components/ui/bar-chart'
 import { TokenIcon } from '@/components/brand/token-icon'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppState } from '@/lib/app-state'
-import { formatMoney, useT } from '@/lib/i18n'
+import { formatMoney, intlLocale, useT } from '@/lib/i18n'
 import type { FxRates } from '@/lib/rates'
 import { secondaryCurrencyFor, useSettings } from '@/lib/settings'
-import { computeSavingsPosition, savingsHistory } from '@/lib/yield'
+import { computeSavingsPosition, dailySavings } from '@/lib/yield'
 import type { ActivityItem } from '@/lib/activity'
 import { isMarket } from '@/lib/strategies'
 import type { MiraiAccount } from '@/lib/types'
@@ -91,7 +91,12 @@ export function YieldPositionCard({
   const earningsTone = earnings === null || earnings === 0n ? 'muted' : earnings > 0n ? 'gold' : 'loss'
   const signed = (amount: bigint, fmt: (a: bigint) => string) =>
     amount < 0n ? `-${fmt(-amount)}` : `${amount > 0n ? '+' : ''}${fmt(amount)}`
-  const history = savingsHistory(activity)
+  const dayLabel = new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short' })
+  const series = dailySavings(activity).map(({ day, saved }) => ({
+    label: dayLabel.format(new Date(`${day}T12:00:00`)),
+    saved: Number(saved) / 1e6,
+    raw: saved,
+  }))
 
   return (
     <Card className="rounded-2xl shadow-none">
@@ -137,16 +142,29 @@ export function YieldPositionCard({
             </>
           )}
         </div>
-        {history.length > 0 && (
+        {series.some((d) => d.raw > 0n) && (
           <div className="mt-5">
             <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
               {t('yield.historyLabel')}
             </p>
-            <SavingsWaveChart
-              history={history}
-              currentValue={position.currentValue}
-              className="mt-2 h-14 w-full"
-            />
+            <BarChart
+              data={series}
+              xDataKey="label"
+              aspectRatio="4 / 1"
+              barGap={0.25}
+              margin={{ top: 8, right: 4, bottom: 24, left: 4 }}
+              className="mt-2"
+            >
+              <Grid horizontal numTicksRows={3} />
+              <Bar dataKey="saved" fill={chartCssVars.linePrimary} lineCap={3} />
+              <BarXAxis maxLabels={5} />
+              <ChartTooltip
+                showDots={false}
+                rows={(point) => [
+                  { color: chartCssVars.linePrimary, label: t('yield.principal'), value: primary(point.raw as bigint) },
+                ]}
+              />
+            </BarChart>
           </div>
         )}
         <p className="mt-5 border-t pt-3 text-xs text-muted-foreground">
