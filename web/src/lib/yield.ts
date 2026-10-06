@@ -1,4 +1,4 @@
-import type { ActivityItem } from '@/lib/activity'
+import type { ActivityItem } from './types.ts'
 
 export type SavingsPosition = {
   /** AUSD put into savings, minus the cost basis of what was withdrawn. Null without full history. */
@@ -24,9 +24,13 @@ function replaySavingsBasis(activity: ActivityItem[]): SavingsHistoryPoint[] {
       basis += item.saved
       points.push({ at: item.at, principal: basis })
     } else if (item.kind === 'wd_save' && item.shares !== undefined) {
-      if (runningShares > 0n) basis -= (basis * item.shares) / runningShares
-      runningShares -= item.shares
-      if (runningShares < 0n) runningShares = 0n
+      // Shares burned can exceed the replayed count once savings moved between strategy vaults (each
+      // vault prices shares differently), so cap at what is held: withdrawing everything zeroes the
+      // basis instead of driving it negative. ponytail: share counts across vaults are approximate;
+      // track StrategySet's moved amount as the new basis if partial post-migration withdrawals drift.
+      const burned = item.shares < runningShares ? item.shares : runningShares
+      basis -= runningShares > 0n ? (basis * burned) / runningShares : basis
+      runningShares -= burned
       points.push({ at: item.at, principal: basis })
     }
   }
@@ -54,3 +58,41 @@ export function computeSavingsPosition(
 export function savingsHistory(activity: ActivityItem[]): SavingsHistoryPoint[] {
   return replaySavingsBasis(activity)
 }
+
+export type DailyIncome = { day: string; received: bigint; saved: bigint }
+
+const dayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Payments received per local day for the last `days` days (oldest first), empty days included. */
+export function dailyIncome(activity: ActivityItem[], days = 30, now = new Date()): DailyIncome[] {
+  const out: DailyIncome[] = []
+  const index = new Map<string, DailyIncome>()
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const row = { day: dayKey(d), received: 0n, saved: 0n }
+    out.push(row)
+    index.set(row.day, row)
+  }
+  for (const item of activity) {
+    if (item.kind !== 'pay' || item.amount === undefined) continue
+    const row = index.get(dayKey(item.at))
+    if (!row) continue
+    row.received += item.amount
+    row.saved += item.saved ?? 0n
+  }
+  return out
+}
+
+/** Savings principal at the end of each of the last `days` local days (oldest first), carried forward. */
+export function dailySavings(activity: ActivityItem[], days = 30, now = new Date()): { day: string; saved: bigint }[] {
+  const points = replaySavingsBasis(activity)
+  let i = 0
+  let saved = 0n
+  return Array.from({ length: days }, (_, n) => {
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - n) + 1)
+    while (i < points.length && points[i].at < end) saved = points[i++].principal
+    return { day: dayKey(new Date(end.getTime() - 1)), saved }
+  })
+}
+
