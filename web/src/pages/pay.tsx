@@ -18,6 +18,7 @@ import { explorerTxUrl } from '@/lib/config'
 import { errorKey } from '@/lib/errors'
 import { parseAusd, shortHex } from '@/lib/format'
 import { formatMoney, useT } from '@/lib/i18n'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { useSettings } from '@/lib/settings'
 import { useScrollLock } from '@/lib/use-scroll-lock'
 import { requestTestFunds } from '@/lib/use-faucet'
@@ -53,6 +54,7 @@ function AddressChip({ address }: { address: string }) {
 
 function PayCard({ recipient }: { recipient: string }) {
   const t = useT()
+  const pendingLabel = usePendingLabel()
   const { address, connecting, disconnect } = useWallet()
   const [signInOpen, setSignInOpen] = useState(false)
   const { rates, busy, runAction } = useAppState()
@@ -70,7 +72,8 @@ function PayCard({ recipient }: { recipient: string }) {
   const [splitPct, setSplitPct] = useState<number | null>(null)
   const [paid, setPaid] = useState<{ amount: bigint; hash: string } | null>(null)
   const anyBusy = busy !== null
-  const displayName = name !== '' ? name : shortAddress(recipient)
+  // Without a name the payer sees a plain label; the address chip below still lets them verify it.
+  const displayName = name !== '' ? name : t('pay.anonName')
 
   useEffect(() => {
     let cancelled = false
@@ -233,7 +236,7 @@ function PayCard({ recipient }: { recipient: string }) {
               onClick={() => void handlePay()}
               disabled={anyBusy || value.trim() === ''}
             >
-              {busy === 'paylink' ? `${t('common.loading')}...` : t('pay.button')}
+              {busy === 'paylink' ? pendingLabel : t('pay.button')}
             </Button>
             <button
               type="button"
