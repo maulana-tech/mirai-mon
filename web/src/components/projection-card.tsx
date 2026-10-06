@@ -1,5 +1,6 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { TokenIcon } from '@/components/brand/token-icon'
+import { Bar, BarChart, BarXAxis, ChartTooltip, Grid, chartCssVars } from '@/components/ui/bar-chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { AUSD_SCALE } from '@/lib/ausd'
@@ -40,7 +41,6 @@ export function ProjectionCard({ account, strategies }: ProjectionCardProps) {
   const t = useT()
   const { rates } = useAppState()
   const { locale, primaryCurrency } = useSettings()
-  const gradientId = useId()
   const [income, setIncome] = useState('1000')
   const [months, setMonths] = useState<(typeof HORIZONS)[number]>(12)
 
@@ -57,17 +57,22 @@ export function ProjectionCard({ account, strategies }: ProjectionCardProps) {
 
   const series = YIELD_STRATEGIES.map((s) => ({ ...s, apr: aprOf(s.id), values: project(start, monthly, aprOf(s.id), months) }))
   const baseline = project(start, monthly, 0, months)
-  const max = Math.max(1, ...series.flatMap((s) => s.values))
-  const toPath = (values: number[]) =>
-    values
-      .map((v, i) => `${i === 0 ? 'M' : 'L'}${((i / months) * 300).toFixed(2)},${(110 - (v / max) * 100).toFixed(2)}`)
-      .join(' ')
   const money = (units: number) => formatMoney(BigInt(Math.round(units * Number(AUSD_SCALE))), primaryCurrency, rates, locale)
   // A Smart Money saver sees the yield strategies for comparison; the summary uses Balanced.
   const market = isMarket(account.strategy)
   const chosen = series.find((s) => s.id === account.strategy) ?? series[1]
   const chosenEnd = chosen.values[months]
   const deposited = baseline[months]
+  // At most 12 bars: monthly up to a year, then every 2 or 5 months.
+  const step = Math.max(1, Math.round(months / 12))
+  const chartData = Array.from({ length: Math.floor(months / step) }, (_, i) => {
+    const m = (i + 1) * step
+    return {
+      label: t('projection.months', { n: m }),
+      deposited: baseline[m],
+      earned: Math.max(0, chosen.values[m] - baseline[m]),
+    }
+  })
 
   return (
     <Card className="rounded-2xl shadow-none">
@@ -112,34 +117,31 @@ export function ProjectionCard({ account, strategies }: ProjectionCardProps) {
           </div>
         </div>
 
-        <svg viewBox="0 0 300 115" className="h-44 w-full" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={`${toPath(chosen.values)} L300,110 L0,110 Z`} fill={`url(#${gradientId})`} />
-          <path
-            d={toPath(baseline)}
-            fill="none"
-            stroke="var(--muted-foreground)"
-            strokeWidth="1"
-            strokeDasharray="3 3"
-            vectorEffect="non-scaling-stroke"
-            opacity="0.6"
+        <BarChart
+          data={chartData}
+          xDataKey="label"
+          stacked
+          aspectRatio="3 / 1"
+          barGap={0.3}
+          margin={{ top: 8, right: 4, bottom: 24, left: 4 }}
+        >
+          <Grid horizontal numTicksRows={4} />
+          <Bar dataKey="deposited" fill={chartCssVars.linePrimary} lineCap="butt" />
+          <Bar dataKey="earned" fill={chartCssVars.lineSecondary} lineCap={4} />
+          <BarXAxis maxLabels={6} />
+          <ChartTooltip
+            showDots={false}
+            rows={(point) => {
+              const dep = Number(point.deposited)
+              const earned = Number(point.earned)
+              return [
+                { color: chartCssVars.linePrimary, label: t('projection.deposited'), value: money(dep) },
+                { color: chartCssVars.lineSecondary, label: t('projection.earned', { name: t(chosen.name) }), value: money(earned) },
+                { color: 'transparent', label: t('projection.total'), value: money(dep + earned) },
+              ]
+            }}
           />
-          {series.map((s) => (
-            <path
-              key={s.id}
-              d={toPath(s.values)}
-              fill="none"
-              stroke={STROKE[s.id]}
-              strokeWidth={s.id === account.strategy ? 2.5 : 1.25}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-        </svg>
+        </BarChart>
 
         <div className="grid gap-2 sm:grid-cols-4">
           {series.map((s) => (
