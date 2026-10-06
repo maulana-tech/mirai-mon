@@ -1,5 +1,6 @@
 import { indexer, type EvmOnEventContext, type Saver } from "envio";
 
+
 // Addresses are stored lowercase so the web app can filter with a plain equality.
 const lc = (a: string) => a.toLowerCase();
 
@@ -24,6 +25,9 @@ function base(event: EventMeta, user: string) {
     bps: undefined,
     until: undefined,
     strategy: undefined,
+    pocket: undefined,
+    custom: undefined,
+    weights: undefined,
   };
 }
 
@@ -37,8 +41,6 @@ async function saver(context: EvmOnEventContext, user: string): Promise<Saver> {
       totalWithdrawn: 0n,
       payments: 0,
       splitBps: undefined,
-      lockUntil: undefined,
-      strategy: undefined,
     }
   );
 }
@@ -77,11 +79,58 @@ indexer.onEvent({ contract: "Mirai", event: "SpendWithdrawn" }, async ({ event, 
   context.Saver.set({ ...s, totalWithdrawn: s.totalWithdrawn + amount });
 });
 
-indexer.onEvent({ contract: "Mirai", event: "SavingsWithdrawn" }, async ({ event, context }) => {
-  const { user, shares, amountOut } = event.params;
-  context.Activity.set({ ...base(event, user), kind: "wd_save", shares, amount: amountOut });
+/** Adds `delta` to a pocket's net deposits (never below zero: growth withdrawn first is still growth). */
+async function addFlow(context: EvmOnEventContext, user: string, pocket: bigint, delta: bigint, reset = false) {
+  const id = `${lc(user)}_${pocket}`;
+  const prev = reset ? 0n : ((await context.PocketFlow.get(id))?.deposited ?? 0n);
+  const next = prev + delta;
+  context.PocketFlow.set({ id, user: lc(user), pocket: Number(pocket), deposited: next > 0n ? next : 0n });
+  return prev;
+}
+
+indexer.onEvent({ contract: "Mirai", event: "PocketFunded" }, async ({ event, context }) => {
+  const { user, pocket, amount } = event.params;
+  await addFlow(context, user, pocket, amount);
+});
+
+indexer.onEvent({ contract: "Mirai", event: "PocketWithdrawn" }, async ({ event, context }) => {
+  const { user, pocket, amount } = event.params;
+  context.Activity.set({ ...base(event, user), kind: "wd_save", pocket: Number(pocket), amount });
+  await addFlow(context, user, pocket, -amount);
   const s = await saver(context, user);
-  context.Saver.set({ ...s, totalWithdrawn: s.totalWithdrawn + amountOut });
+  context.Saver.set({ ...s, totalWithdrawn: s.totalWithdrawn + amount });
+});
+
+indexer.onEvent({ contract: "Mirai", event: "PocketCreated" }, async ({ event, context }) => {
+  const { user, pocket, strategy } = event.params;
+  // pocket 0 is the default one, opened implicitly on first use: no feed row; a reused slot starts empty
+  if (pocket !== 0n)
+    context.Activity.set({ ...base(event, user), kind: "pocket_new", pocket: Number(pocket), strategy: Number(strategy) });
+  await addFlow(context, user, pocket, 0n, true);
+});
+
+indexer.onEvent({ contract: "Mirai", event: "PocketClosed" }, async ({ event, context }) => {
+  const { user, pocket, into, moved } = event.params;
+  context.Activity.set({ ...base(event, user), kind: "pocket_close", pocket: Number(pocket), amount: moved });
+  // the closed pocket's deposits travel with its money
+  const carried = await addFlow(context, user, pocket, 0n, true);
+  await addFlow(context, user, into, carried);
+});
+
+indexer.onEvent({ contract: "Mirai", event: "PocketLockSet" }, async ({ event, context }) => {
+  const { user, pocket, until } = event.params;
+  context.Activity.set({ ...base(event, user), kind: "lock", pocket: Number(pocket), until });
+});
+
+indexer.onEvent({ contract: "Mirai", event: "PocketStrategySet" }, async ({ event, context }) => {
+  const { user, pocket, strategy, moved } = event.params;
+  context.Activity.set({
+    ...base(event, user),
+    kind: "strategy",
+    pocket: Number(pocket),
+    strategy: Number(strategy),
+    amount: moved,
+  });
 });
 
 indexer.onEvent({ contract: "Mirai", event: "SplitSet" }, async ({ event, context }) => {
@@ -91,16 +140,13 @@ indexer.onEvent({ contract: "Mirai", event: "SplitSet" }, async ({ event, contex
   context.Saver.set({ ...s, splitBps: Number(bps) });
 });
 
-indexer.onEvent({ contract: "Mirai", event: "LockSet" }, async ({ event, context }) => {
-  const { user, until } = event.params;
-  context.Activity.set({ ...base(event, user), kind: "lock", until });
-  const s = await saver(context, user);
-  context.Saver.set({ ...s, lockUntil: until });
-});
-
-indexer.onEvent({ contract: "Mirai", event: "StrategySet" }, async ({ event, context }) => {
-  const { user, strategy, moved } = event.params;
-  context.Activity.set({ ...base(event, user), kind: "strategy", strategy: Number(strategy), amount: moved });
-  const s = await saver(context, user);
-  context.Saver.set({ ...s, strategy: Number(strategy) });
+indexer.onEvent({ contract: "BasketVault", event: "WeightsSet" }, async ({ event, context }) => {
+  const { user, pocket, custom, weights } = event.params;
+  context.Activity.set({
+    ...base(event, user),
+    kind: "basket",
+    pocket: Number(pocket),
+    custom,
+    weights: weights.map(Number),
+  });
 });
