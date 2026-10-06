@@ -9,6 +9,7 @@ import { useSettings } from '@/lib/settings'
 import { DEFAULT_APR_BPS, STRATEGIES, formatApr, isMarket } from '@/lib/strategies'
 import type { MiraiAccount, StrategyId, StrategyStats } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { useWallet } from '@/lib/wallet'
 
 type StrategyPickerProps = {
@@ -21,6 +22,7 @@ type StrategyPickerProps = {
 export function StrategyPicker({ account, strategies, onChanged }: StrategyPickerProps) {
   const t = useT()
   const { address } = useWallet()
+  const pendingLabel = usePendingLabel()
   const { busy, rates, runAction } = useAppState()
   const { locale, primaryCurrency } = useSettings()
 
@@ -54,7 +56,9 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
                   'relative flex flex-col rounded-2xl border p-4 text-left outline-none transition-[border-color,box-shadow,transform] focus-visible:ring-3 focus-visible:ring-ring/50',
                   selected
                     ? 'border-primary bg-primary/5 shadow-[0_0_0_1px_var(--primary)_inset]'
-                    : 'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0',
+                    : pending
+                      ? 'border-primary/60' // the card being switched to stays fully visible while it waits
+                      : 'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0',
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -95,8 +99,9 @@ export function StrategyPicker({ account, strategies, onChanged }: StrategyPicke
                   {t('strategy.mainnet', { market: s.mainnet })}
                 </span>
                 {pending && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-card/80">
-                    <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-card/90 px-3 text-center">
+                    <Loader2Icon className="size-5 animate-spin text-primary-ink" />
+                    <span className="text-xs font-medium text-primary-ink">{pendingLabel}</span>
                   </span>
                 )}
               </button>
