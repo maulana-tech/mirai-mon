@@ -23,13 +23,18 @@ export function CoinIcon({
   size = 32,
   kind = 'coin',
   className,
+  fallbackSrc,
 }: {
   symbol: string
   size?: number
   kind?: 'coin' | 'stock'
   className?: string
+  /** Remote logo tried when there is no bundled icon (e.g. a DexScreener logo for a Monad memecoin). */
+  fallbackSrc?: string
 }) {
-  const [missing, setMissing] = useState(false)
+  // 0: bundled icon, 1: fallbackSrc, 2: ticker badge
+  const [stage, setStage] = useState(0)
+  const missing = stage >= (fallbackSrc ? 2 : 1)
   if (symbol === 'AUSD') return <TokenIcon token="ausd" size={size} className={className} />
   if (missing)
     return (
@@ -46,12 +51,16 @@ export function CoinIcon({
     )
   return (
     <img
-      src={`/${kind === 'stock' ? 'stocks' : 'coins'}/${ALIAS[symbol.toUpperCase()] ?? symbol.toLowerCase()}.svg`}
+      src={
+        stage === 1 && fallbackSrc
+          ? fallbackSrc
+          : `/${kind === 'stock' ? 'stocks' : 'coins'}/${ALIAS[symbol.toUpperCase()] ?? symbol.toLowerCase()}.svg`
+      }
       alt=""
       width={size}
       height={size}
-      onError={() => setMissing(true)}
-      className={cn('shrink-0 rounded-full', className)}
+      onError={() => setStage((s) => s + 1)}
+      className={cn('shrink-0 rounded-full object-cover', className)}
     />
   )
 }
