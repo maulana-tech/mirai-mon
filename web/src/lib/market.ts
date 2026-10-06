@@ -2,11 +2,25 @@ import { useEffect, useState } from 'react'
 import { mirai } from '@/lib/mirai'
 import type { MarketBasket } from '@/lib/types'
 
-/** `/api/market` (Nansen smart-money holdings on Monad). Mirrors `MarketInfo` in `api/market.ts`. */
-export type Holding = { symbol: string; valueUsd: number; change24hPct: number; holders: number; sharePct: number }
+/** `/api/market` (Nansen smart-money holdings and 24h DEX flows on Monad). Mirrors `MarketInfo` in `api/market.ts`. */
+export type Holding = {
+  symbol: string
+  address: string
+  /** DexScreener logo, for tokens without a bundled icon. */
+  logo?: string
+  valueUsd: number
+  change24hPct: number
+  holders: number
+  sharePct: number
+  /** Smart-money net DEX buying (+) or selling (−) over the last 24 hours, USD. */
+  flow24hUsd?: number
+}
+export type Flow = { symbol: string; address: string; logo?: string; flow24hUsd: number; trades: number }
 export type MarketInfo = {
   weights: { symbol: string; bps: number }[]
   holdings: Holding[]
+  /** Tokens smart money net-bought most over the last 24 hours (from Nansen DEX trades). */
+  movers?: Flow[]
   source: 'nansen' | 'default'
   fetchedAt: number
 }
