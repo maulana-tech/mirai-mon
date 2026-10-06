@@ -59,8 +59,10 @@ export function ProjectionCard({ account, strategies }: ProjectionCardProps) {
   const baseline = project(start, monthly, 0, months)
   const money = (units: number) => formatMoney(BigInt(Math.round(units * Number(AUSD_SCALE))), primaryCurrency, rates, locale)
   // A Smart Money saver sees the yield strategies for comparison; the summary uses Balanced.
-  const market = isMarket(account.strategy)
-  const chosen = series.find((s) => s.id === account.strategy) ?? series[1]
+  // The pocket taking the biggest share of new savings stands for the account.
+  const main = account.pockets.reduce((m, p) => (p.shareBps > m.shareBps ? p : m), account.pockets[0])
+  const market = !main || isMarket(main.strategy)
+  const chosen = series.find((s) => s.id === main?.strategy) ?? series[1]
   const chosenEnd = chosen.values[months]
   const deposited = baseline[months]
   // At most 12 bars: monthly up to a year, then every 2 or 5 months.
@@ -147,7 +149,7 @@ export function ProjectionCard({ account, strategies }: ProjectionCardProps) {
           {series.map((s) => (
             <div
               key={s.id}
-              className={cn('rounded-xl border p-3', s.id === account.strategy && 'border-primary bg-primary/5')}
+              className={cn('rounded-xl border p-3', s.id === main?.strategy && 'border-primary bg-primary/5')}
             >
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="size-2 rounded-full" style={{ background: STROKE[s.id] }} />
