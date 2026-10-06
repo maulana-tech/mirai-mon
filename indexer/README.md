@@ -5,7 +5,7 @@
 | File | What it holds |
 |---|---|
 | `config.yaml` | Mirai address + start block (from `../deployments.json`) and the six events: `PaymentRouted`, `SpendWithdrawn`, `SavingsWithdrawn`, `SplitSet`, `LockSet`, `StrategySet` |
-| `schema.graphql` | `Activity` (one row per event, keyed to the account it belongs to: a payment shows up for the recipient, with sender and saved slice), `Saver` (running per-account totals and current split, lock and strategy), `Protocol` (volume, saved, payments, savers) |
+| `schema.graphql` | `Activity` (one row per event, keyed to the account it belongs to: a payment writes a `pay` row for the recipient, with sender and saved slice, and a `sent` row for the payer), `Saver` (running per-account totals and current split, lock and strategy), `Protocol` (volume, saved, payments, savers) |
 | `src/EventHandlers.ts` | Handlers that write the activity row and update the aggregates |
 
 The web app reads it through `VITE_INDEXER_URL` (`web/src/lib/activity.ts` for the feed, `fetchProtocolStats` for the landing page). Without it the app falls back to the last ~5 minutes of RPC logs and hides earnings rather than showing a wrong number.
