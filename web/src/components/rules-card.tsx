@@ -8,6 +8,7 @@ import { useAppState } from '@/lib/app-state'
 import { AUSD_SCALE } from '@/lib/ausd'
 import { mirai } from '@/lib/mirai'
 import { formatDate, formatMoney, useT } from '@/lib/i18n'
+import { usePendingLabel } from '@/lib/use-pending-label'
 import { useSettings } from '@/lib/settings'
 import type { MiraiAccount } from '@/lib/types'
 import { useWallet } from '@/lib/wallet'
@@ -21,6 +22,7 @@ type RulesCardProps = {
 
 export function RulesCard({ account }: RulesCardProps) {
   const t = useT()
+  const pendingLabel = usePendingLabel()
   const { address } = useWallet()
   const { busy, rates, runAction } = useAppState()
   const { locale } = useSettings()
@@ -103,7 +105,7 @@ export function RulesCard({ account }: RulesCardProps) {
         onClick={() => void handleSaveSplit()}
         disabled={anyBusy || unchanged}
       >
-        {busy === 'split' ? `${t('common.loading')}...` : t('rules.saveButton')}
+        {busy === 'split' ? pendingLabel : t('rules.saveButton')}
       </Button>
 
       <div className="mt-5 rounded-2xl border p-4">
@@ -129,7 +131,7 @@ export function RulesCard({ account }: RulesCardProps) {
             onClick={() => void handleLock()}
             disabled={anyBusy || date === '' || date < tomorrow}
           >
-            {busy === 'lock' ? `${t('common.loading')}...` : t('rules.lockButton')}
+            {busy === 'lock' ? pendingLabel : t('rules.lockButton')}
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{t('rules.lockCaption')}</p>
