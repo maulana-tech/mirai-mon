@@ -76,11 +76,17 @@ Savers pick one of four strategies, each its own ERC-4626 vault: three earn yiel
 
 The fourth strategy puts savings into a **BTC/ETH basket** instead of a yield vault. `MarketVault` is an ERC-4626 vault whose share value is the basket's market value, read from **Chainlink push feeds** on Monad (BTC/USD, ETH/USD), so it moves with the market and can fall below what was saved. The app shows that risk on every surface.
 
-**Nansen decides the tilt.** `web/api/market.ts` calls Nansen's `POST /api/v1/smart-money/holdings` (`chains: ["monad"]`, stablecoins excluded, native tokens included) once a day:
+**Nansen decides the tilt.** `web/api/market.ts` makes two Nansen calls a day (≈10 credits, the free plan's daily allowance), both with `chains: ["monad"]`:
 
-- Smart money's USD holdings of BTC-like (WBTC, cbBTC, …) and ETH-like (WETH, wstETH, …) tokens set the basket weights, with a 20% floor per coin.
-- When the weights drift more than 3% from the on-chain ones, the server (the vault's `curator`) calls `MarketVault.rebalance`, which re-weights at current prices without changing the value.
-- The Yield page shows the basket, live prices and Nansen's top smart-money holdings on Monad (value, holders, 24h change), so the saver sees *why* the basket looks the way it does.
+| Endpoint | Data category | What Mirai does with it |
+|---|---|---|
+| `POST /api/v1/smart-money/holdings` | Smart Money · holdings | Where smart money's money sits: USD held per token, holder count |
+| `POST /api/v1/smart-money/dex-trades` | Smart Money · DEX trades (trailing 24h) | Where it is heading: Mirai nets USD bought minus USD sold per token (`flowsFromTrades`). `smart-money/netflow` returns no rows for Monad yet, so the flow is computed from the trades |
+
+- **Basket weights (on-chain):** conviction per coin = USD held + 24h net DEX buying (selling subtracts, floored at 0), over BTC-like (WBTC, cbBTC, …) and ETH-like (WETH, wstETH, …) tokens, with a 20% floor per coin. When the weights drift more than 3% from the on-chain ones, the server (the vault's `curator`) calls `MarketVault.rebalance`, which re-weights at current prices without changing the value. Nansen data moves savers' money, it isn't only displayed.
+- **Insight:** the Smart Money card lists the top smart-money holdings on Monad (value, holders, 24h net buy) and the tokens smart money bought most today, so the saver sees *why* the basket looks the way it does. Token logos come from DexScreener by the addresses Nansen returns.
+- **Simulator:** the Market page's "Smart Money today" preset backtests the basket's current weights.
+- Smart money's on-chain activity on Monad is still thin (a handful of DEX trades a day), and its biggest positions are MON and memecoins, which the testnet basket can't hold (no MON/USD Chainlink feed). On mainnet, MON joins the basket through Kuru.
 
 The **Market** page (`/app/market`) puts it in context: live prices from Chainlink on Monad, the Smart Money basket with a one-tap "invest" switch, and a pool simulator for any mix of crypto, tokenized stocks, gold and AUSD (90-day backtest on Binance daily closes, plus an 80% range from volatility). Only the Smart Money basket is investable on-chain; the simulator is labelled as a simulation.
 
