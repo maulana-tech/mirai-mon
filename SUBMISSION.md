@@ -10,7 +10,7 @@
 | **Source** | https://github.com/maulana-tech/mirai-mon |
 | **Live demo** | _to be added_ |
 | **Demo video** | _to be added_ |
-| **Main contract** | `Mirai` [`0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83`](https://testnet.monadscan.com/address/0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83) |
+| **Main contract** | `Mirai` [`0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83`](https://testnet.monadscan.com/address/0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83) (verified on Sourcify) |
 
 ## The product in one paragraph
 
@@ -118,6 +118,5 @@ Where to look: [`indexer/config.yaml`](indexer/config.yaml), [`indexer/schema.gr
 
 - Testnet has no AUSD lending market or coin liquidity: yield vaults pay a **simulated** APR from a reserve, and the basket books units at oracle prices instead of swapping. The app labels both.
 - The curator wallet pushes memecoin prices and Smart Money weights. Fine for a testnet demo; the mainnet plan removes curator prices and puts weights behind a multisig.
-- Contracts are not yet verified on Sourcify.
 
 What it takes to run Mirai with real money on Monad mainnet: [docs/next-plan.md](docs/next-plan.md).
