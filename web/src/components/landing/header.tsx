@@ -9,11 +9,12 @@ import { ArrowLink, MiraiMark } from './kit'
  * `data-tone` is switched by LandingFX to "light" over white sections (logo + capsules turn cobalt).
  */
 export function LandingHeader() {
-  const t = useT()
+  const t = useT('en')
   const { address } = useWallet()
   const nav = [
     ['#how', t('landing.navHow')],
     ['#features', t('landing.navFeatures')],
+    ['#architecture', t('landing.navArch')],
     ['#live', t('landing.navLive')],
   ] as const
   const capsule =
