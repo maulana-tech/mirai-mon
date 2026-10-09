@@ -38,7 +38,7 @@ export function PocketCard({
       to={`/app/pockets/${pocket.id}`}
       className={cn(
         'group flex flex-col rounded-2xl border bg-card p-4 outline-none transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50',
-        compact ? 'min-h-40 w-36 shrink-0' : 'min-h-60',
+        compact ? 'min-h-40 w-36 shrink-0' : 'min-h-[324px]',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -52,7 +52,7 @@ export function PocketCard({
       {progress !== null && (
         <div className="mt-2 space-y-1">
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-gold" style={{ width: `${progress}%` }} />
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-[11px] text-muted-foreground tabular-nums">
             {t('pockets.ofTarget', { pct: Math.floor(progress), target: formatMoney(target, primaryCurrency, rates, locale) })}
@@ -84,7 +84,7 @@ export function NewPocketTile({ onClick, label }: { onClick: () => void; label: 
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-60 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/40 text-sm text-white/80 outline-none transition-colors hover:border-white hover:bg-white/10 hover:text-white dark:border-cobalt/40 dark:text-cobalt/80 dark:hover:text-cobalt focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex min-h-[324px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/40 text-sm text-white/80 outline-none transition-colors hover:border-white hover:bg-white/10 hover:text-white dark:border-cobalt/40 dark:text-cobalt/80 dark:hover:text-cobalt focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <PlusIcon className="size-6" />
       {label}
