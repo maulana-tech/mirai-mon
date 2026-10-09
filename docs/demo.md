@@ -6,8 +6,7 @@ Passkey prompts are covered with a "Passkey confirmed" card in the videos: the o
 
 ## The 3-minute demo
 
-<!-- Paste the uploaded mirai-demo-short.mp4 link (GitHub user-attachments or YouTube) on the next line. -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/e83bf82d-50dd-4fcd-82e0-fb9743062acd
 
 | Time | What happens |
 |---|---|
@@ -44,8 +43,7 @@ Seven short chapters, each with a timeline. Together they are the full 6:44 walk
 
 ### 1. The landing page
 
-<!-- chapter-1.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/9653aa87-9e6a-4962-92c8-647ce2bf245a
 
 | Time | What happens |
 |---|---|
@@ -56,8 +54,7 @@ _Video: being uploaded._
 
 ### 2. Sign in, get funds, share your link
 
-<!-- chapter-2.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/8acd6687-8f00-4b5a-bf1f-869d84d045f5
 
 | Time | What happens |
 |---|---|
@@ -69,8 +66,7 @@ What to look for: the first transaction needs no faucet visit (**Mera UX**).
 
 ### 3. Pay a link
 
-<!-- chapter-3.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/58f3da97-5d59-46c7-b4d2-324305bf6acf
 
 | Time | What happens |
 |---|---|
@@ -82,8 +78,7 @@ What to look for: no approve step; one transaction from tap to settled (**AUSD**
 
 ### 4. Split and pockets
 
-<!-- chapter-4.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/4acb475b-da10-4a81-b140-e75563660abb
 
 | Time | What happens |
 |---|---|
@@ -95,8 +90,7 @@ What to look for: the pocket's `meta` on-chain is ciphertext; the same passkey o
 
 ### 5. Yield and invest
 
-<!-- chapter-5.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/44a38a9b-94ac-4bb6-acde-2cb88dde5882
 
 | Time | What happens |
 |---|---|
@@ -108,8 +102,7 @@ What to look for: "Powered by Nansen" with today's update time; the weights come
 
 ### 6. A live receipt
 
-<!-- chapter-6.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/9c2b76a8-2269-4579-95c2-f7dd503adb59
 
 | Time | What happens |
 |---|---|
@@ -118,8 +111,7 @@ _Video: being uploaded._
 
 ### 7. Send and withdraw
 
-<!-- chapter-7.mp4 -->
-_Video: being uploaded._
+https://github.com/user-attachments/assets/db618e84-2390-4e3f-af84-b3e625297d5b
 
 | Time | What happens |
 |---|---|
