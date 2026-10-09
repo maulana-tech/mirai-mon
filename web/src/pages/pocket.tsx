@@ -97,7 +97,7 @@ function PocketDetail({ account, pocket }: { account: MiraiAccount; pocket: Pock
           {progress !== null && (
             <div className="space-y-1.5">
               <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-gold" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
               </div>
               <p className="text-sm text-muted-foreground tabular-nums">
                 {progress >= 100
