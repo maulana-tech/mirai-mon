@@ -75,10 +75,11 @@ export function LandingFX() {
             strokeDashoffset: 0,
             ease: 'none',
             immediateRender: true,
+            // measured on the svg itself: a tall section would leave the lines half-drawn while they are on screen
             scrollTrigger: {
-              trigger: p.closest('section') ?? p,
-              start: 'top 75%',
-              end: 'center 40%',
+              trigger: p.ownerSVGElement ?? p,
+              start: 'top 90%',
+              end: 'bottom 55%',
               scrub: 1,
               invalidateOnRefresh: true,
             },
