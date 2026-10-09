@@ -1,4 +1,4 @@
-import { useState } from 'react'
+`import { useState } from 'react'
 import { ActivityList } from '@/components/activity-list'
 import { ConnectPrompt } from '@/components/connect-prompt'
 import { Button } from '@/components/ui/button'
