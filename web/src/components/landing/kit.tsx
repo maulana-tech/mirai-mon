@@ -101,7 +101,7 @@ export function PixelBand({
   )
 }
 
-export type LineArtKind = 'passkey' | 'link' | 'split' | 'vault' | 'lock' | 'withdraw'
+export type LineArtKind = 'passkey' | 'link' | 'split' | 'vault' | 'lock' | 'withdraw' | 'pockets' | 'invest'
 
 /** Thin line drawings for the cobalt feature cards. */
 export function LineArt({ kind, className }: { kind: LineArtKind; className?: string }) {
@@ -161,6 +161,33 @@ export function LineArt({ kind, className }: { kind: LineArtKind; className?: st
         <path d="M92 56v-6a8 8 0 0 1 16 0v6" />
         {bus(30, 0, 60, 2)}
         {bus(84, 140, 200, 2)}
+      </>
+    ),
+    // one stream fanning out into several pockets of different sizes
+    pockets: (
+      <>
+        {bus(56, 0, 56, 3)}
+        <path d="M56 60h12M68 24v72M68 24h20M68 60h20M68 96h20" />
+        {[24, 60, 96].map((y, i) => (
+          <g key={y}>
+            <rect x={88} y={y - 11} width={72} height={22} />
+            <path d={`M94 ${y}h${[44, 24, 58][i]}`} strokeWidth={3} />
+          </g>
+        ))}
+        {bus(58, 160, 200, 2)}
+      </>
+    ),
+    // a price line climbing over a basket of coins
+    invest: (
+      <>
+        {[40, 72, 104].map((x) => (
+          <circle key={x} cx={x} cy={92} r={12} />
+        ))}
+        <path d="M14 70l30-14 22 8 30-26 24 10 30-28 30 4" />
+        {[44, 66, 96, 120, 150].map((x, i) => (
+          <circle key={x} cx={x} cy={[56, 64, 38, 48, 20][i]} r={2.5} />
+        ))}
+        {bus(94, 140, 200, 2)}
       </>
     ),
     // pocket emptying out to the right
