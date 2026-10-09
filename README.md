@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="web/public/mirai-logo-1024.png" alt="Mirai" width="120" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/mirai-logo-01-on-dark.png" />
+    <img src="web/public/mirai-logo-01.png" alt="Mirai" width="160" />
+  </picture>
 </p>
 
 <h1 align="center">Mirai</h1>
