@@ -362,7 +362,7 @@ Payer            Mirai                         Yield vaults / BasketVault       
 
 ### Addresses (Monad testnet, chain 10143)
 
-Deployed from block `68647993`. Source of truth: [`deployments.json`](deployments.json) and [`web/src/lib/config.ts`](web/src/lib/config.ts).
+Deployed from block `68647993`; every contract below except AUSD is verified on Sourcify (exact match). Source of truth: [`deployments.json`](deployments.json) and [`web/src/lib/config.ts`](web/src/lib/config.ts).
 
 | Contract | Address |
 |---|---|
@@ -419,7 +419,7 @@ WeightsSet · SmartWeightsSet · PricesSet · Deposited · Withdrawn          # 
 
 ## Deployment Checklist
 
-- [x] Mirai, three yield vaults + streamers and BasketVault deployed on Monad testnet
+- [x] Mirai, three yield vaults + streamers and BasketVault deployed on Monad testnet, all verified on Sourcify (exact match)
 - [x] Payments with EIP-2612 permit: one transaction, split on arrival
 - [x] Pockets: up to ten, shares, strategy, target, extend-only lock, close
 - [x] Private pocket names and targets, encrypted with a second passkey-derived key
@@ -429,7 +429,6 @@ WeightsSet · SmartWeightsSet · PricesSet · Deposited · Withdrawn          # 
 - [x] Envio HyperIndex: activity, per-pocket deposits, saver and protocol totals
 - [x] Foundry tests (41) and a fork end-to-end check (`check-fork.ts`)
 - [x] Landing page, three languages
-- [ ] Contracts verified on Sourcify
 - [ ] Live demo on Vercel and the indexer on Envio Cloud
 - [ ] Demo video
 
