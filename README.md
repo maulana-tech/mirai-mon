@@ -35,7 +35,7 @@ You sign in with a **passkey** (Face ID or fingerprint) through **Mera**. There 
 
 ## Demo
 
-Demo video and live URL: being prepared for the submission (see [SUBMISSION.md](SUBMISSION.md)). Until then, run it locally against the live testnet contracts in two commands: [Setup](#setup).
+**[▶ Demo: the 3-minute video and seven step-by-step chapters](docs/demo.md)**, each with a timeline of what happens when. Live URL: being prepared (see [SUBMISSION.md](SUBMISSION.md)); until then, run it locally against the live testnet contracts in two commands: [Setup](#setup).
 
 | # | Flow | Where |
 |---|---|---|
@@ -430,7 +430,7 @@ WeightsSet · SmartWeightsSet · PricesSet · Deposited · Withdrawn          # 
 - [x] Foundry tests (41) and a fork end-to-end check (`check-fork.ts`)
 - [x] Landing page, three languages
 - [ ] Live demo on Vercel and the indexer on Envio Cloud
-- [ ] Demo video
+- [x] Demo video: a 3-minute cut and seven chapters ([docs/demo.md](docs/demo.md)), upload pending
 
 **One limitation worth naming.** Yield vaults pay a simulated APR from a reserve, and the invest basket books units at oracle prices instead of swapping, because Monad testnet has no AUSD liquidity for these coins. The path to real money (real AUSD vaults, swaps through Kuru or 0x, a multisig curator, gas sponsorship) is written up in [docs/next-plan.md](docs/next-plan.md).
 
@@ -460,6 +460,7 @@ WeightsSet · SmartWeightsSet · PricesSet · Deposited · Withdrawn          # 
 
 | Doc | What's in it |
 |---|---|
+| [Demo](docs/demo.md) | The 3-minute video and seven chapters, with timelines |
 | [Submission](SUBMISSION.md) | Track and bounty fit, with file references, demo script |
 | [Architecture](docs/architecture.md) | Contracts, passkey accounts, data flow |
 | [Deployment](docs/deployment.md) | Contracts, indexer, app; environment variables; smoke test |
