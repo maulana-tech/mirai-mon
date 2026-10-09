@@ -15,10 +15,14 @@ import { mirai } from '@/lib/mirai'
 import { explorerTxUrl } from '@/lib/config'
 import { errorKey } from '@/lib/errors'
 import { shortHex } from '@/lib/format'
-import { useT, type MessageKey } from '@/lib/i18n'
+import { formatMoney, useT, type MessageKey } from '@/lib/i18n'
 import { FALLBACK_RATES, getFxRates, type FxRates } from '@/lib/rates'
+import { useSettings } from '@/lib/settings'
 import type { MiraiAccount } from '@/lib/types'
 import { useWallet } from '@/lib/wallet'
+
+// Someone else paying you changes nothing in this tab, so poll while the tab is visible.
+const POLL_MS = 10_000
 
 type AccountStatus = 'disconnected' | 'loading' | 'ready' | 'error'
 
@@ -55,6 +59,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [historyFull, setHistoryFull] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const addressRef = useRef(address)
+  const busyRef = useRef(busy)
+  busyRef.current = busy
+  // Activity ids already shown; a new incoming payment among the rest gets a toast.
+  const seenRef = useRef<Set<string> | null>(null)
+  const { locale, primaryCurrency } = useSettings()
+  const notifyRef = useRef<(items: ActivityItem[]) => void>(() => {})
+  notifyRef.current = (items) => {
+    const money = (v: bigint | undefined) => formatMoney(v ?? 0n, primaryCurrency, rates, locale)
+    for (const it of items)
+      if (it.kind === 'pay') toast.success(t('activity.pay', { amount: money(it.amount), saved: money(it.saved) }))
+  }
 
   useEffect(() => {
     void getFxRates().then(setRates)
@@ -83,7 +98,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setAccountStatus('error')
     }
     if (activityResult.status === 'fulfilled') {
-      setActivity(activityResult.value.items)
+      const items = activityResult.value.items
+      const seen = seenRef.current
+      if (seen && !initial) notifyRef.current(items.filter((it) => !seen.has(it.id)))
+      seenRef.current = new Set(items.map((it) => it.id))
+      setActivity(items)
       setHistoryFull(activityResult.value.complete)
     } else {
       setHistoryFull(false)
@@ -93,6 +112,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     addressRef.current = address
+    seenRef.current = null
     if (!address) {
       setAccount(null)
       setWallet(null)
@@ -108,6 +128,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (addressRef.current) await load(addressRef.current, false)
   }, [load])
+
+  useEffect(() => {
+    if (!address) return
+    const tick = () => {
+      if (document.visibilityState === 'visible' && busyRef.current === null) void refresh()
+    }
+    const id = setInterval(tick, POLL_MS)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [address, refresh])
 
   const runAction = useCallback(
     async <T extends { hash: string }>(
