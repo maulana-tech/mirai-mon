@@ -74,6 +74,13 @@ function PayCard({ recipient }: { recipient: string }) {
   const anyBusy = busy !== null
   // Without a name the payer sees a plain label; the address chip below still lets them verify it.
   const displayName = name !== '' ? name : t('pay.anonName')
+  // Opening your own link: paying yourself would only shuffle your own money, so offer sharing instead.
+  const own = address !== null && address.toLowerCase() === recipient.toLowerCase()
+
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(window.location.href)
+    toast.success(t('settings.copied'))
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -170,7 +177,7 @@ function PayCard({ recipient }: { recipient: string }) {
         </div>
         <p className="mx-auto max-w-xs text-xs text-muted-foreground">{t('pay.signHint')}</p>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className={own ? 'hidden' : 'space-y-3'}>
         <div className="relative">
           <TokenIcon
             token="ausd"
@@ -208,7 +215,25 @@ function PayCard({ recipient }: { recipient: string }) {
         )}
       </CardContent>
       <CardFooter className="flex-col items-stretch gap-3">
-        {address ? (
+        {own ? (
+          <>
+            <div className="rounded-xl border bg-muted/50 p-3 text-center">
+              <p className="text-sm font-medium">{t('pay.ownTitle')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('pay.ownBody')}</p>
+            </div>
+            <Button size="lg" className="w-full" onClick={() => void copyLink()}>
+              <CopyIcon className="size-4" />
+              {t('pay.ownCopy')}
+            </Button>
+            <button
+              type="button"
+              onClick={() => void disconnect()}
+              className="text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              {t('pay.ownSwitch')}
+            </button>
+          </>
+        ) : address ? (
           <>
             <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
