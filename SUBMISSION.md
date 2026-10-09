@@ -9,7 +9,7 @@
 | **Network** | Monad testnet (chain 10143) |
 | **Source** | https://github.com/maulana-tech/mirai-mon |
 | **Live demo** | _to be added_ |
-| **Demo video** | [docs/demo.md](docs/demo.md): 3-minute cut + seven chapters with timelines (upload pending) |
+| **Demo video** | [3-minute demo](https://github.com/user-attachments/assets/e83bf82d-50dd-4fcd-82e0-fb9743062acd) · [seven chapters with timelines](docs/demo.md) |
 | **Main contract** | `Mirai` [`0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83`](https://testnet.monadscan.com/address/0xEAFFa1705b5cf69B291aa88484F9655Fe8341b83) (verified on Sourcify) |
 
 ## The product in one paragraph
