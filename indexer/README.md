@@ -20,4 +20,4 @@ npm run dev                   # Docker; GraphQL at http://localhost:8080/v1/grap
 ../web/node_modules/.bin/tsc -p .   # typecheck handlers
 ```
 
-After a redeploy (new address or start block) Envio refuses to resume: `npx envio dev -r` resets the local index. For production, deploy this folder to Envio Cloud and use its GraphQL URL as `VITE_INDEXER_URL`.
+After a redeploy (new address or start block) Envio refuses to resume: `npx envio dev -r` resets the local index. For production, deploy this folder to Envio Cloud (Indexer Directory `indexer`, release branch `envio`, `envio` pinned to an exact version in `package.json`) and use its GraphQL URL as `VITE_INDEXER_URL`.
